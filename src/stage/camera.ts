@@ -3,17 +3,34 @@ import { toRadians } from "../math_util";
 import { device, canvas, fovYDegrees, aspectRatio } from "../renderer";
 
 class CameraUniforms {
-    readonly buffer : ArrayBuffer = new ArrayBuffer(16 * 4);
+    readonly buffer : ArrayBuffer = new ArrayBuffer(16 * 9);
     private readonly floatView : Float32Array = new Float32Array(this.buffer);
 
-    set viewProjMat(mat: Float32Array) {
-        // TODO-1.1: set the first 16 elements of `this.floatView` to the input `mat`
+    set viewProjMat(viewProjMat: Float32Array) {
         for(var i = 0; i < 16; i++){
-            this.floatView[i] = mat[i];
+            this.floatView[i] = viewProjMat[i];
         }
     }
 
-    // TODO-2: add extra functions to set values needed for light clustering here
+    set viewMat(viewMat: Float32Array) {
+        for(var i = 0; i < 16; i++){
+            this.floatView[i+16] = viewMat[i];
+        }
+    }
+
+    set viewportSizeX(s:number){
+        this.floatView[128] = s;
+    }
+    set viewportSizeY(s:number){
+        this.floatView[129] = s;
+    }
+
+    set ParamX(s:number){
+        this.floatView[130] = s;
+    }
+    set ParamY(s:number){
+        this.floatView[131] = s;
+    }
 }
 
 export class Camera {
@@ -135,11 +152,12 @@ export class Camera {
         const lookPos = vec3.add(this.cameraPos, vec3.scale(this.cameraFront, 1));
         const viewMat = mat4.lookAt(this.cameraPos, lookPos, [0, 1, 0]);
         const viewProjMat = mat4.mul(this.projMat, viewMat);
-        // TODO-1.1: set `this.uniforms.viewProjMat` to the newly calculated view proj mat
         this.uniforms.viewProjMat = viewProjMat;
-        // TODO-2: write to extra buffers needed for light clustering here
-
-        // TODO-1.1: upload `this.uniforms.buffer` (host side) to `this.uniformsBuffer` (device side)
+        this.uniforms.viewMat = viewMat;
+        this.uniforms.viewportSizeX = canvas.width;
+        this.uniforms.viewportSizeY = canvas.height;
+        this.uniforms.ParamX = aspectRatio * Math.tan(toRadians(fovYDegrees));
+        this.uniforms.ParamY = Math.tan(toRadians(fovYDegrees));
         device.queue.writeBuffer(this.uniformsBuffer, 0, this.uniforms.buffer);
         // check `lights.ts` for examples of using `device.queue.writeBuffer()`
     }

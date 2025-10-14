@@ -8,6 +8,8 @@ import naiveVertRaw from './naive.vs.wgsl?raw';
 import naiveFragRaw from './naive.fs.wgsl?raw';
 
 import forwardPlusFragRaw from './forward_plus.fs.wgsl?raw';
+import zPrepassFragRaw from './z_prepass.fs.wgsl?raw';
+import forwardPlusCSRaw from './forward_plus.cs.wgsl?raw'
 
 import clusteredDeferredFragRaw from './clustered_deferred.fs.wgsl?raw';
 import clusteredDeferredFullscreenVertRaw from './clustered_deferred_fullscreen.vs.wgsl?raw';
@@ -26,11 +28,18 @@ import clusteringComputeRaw from './clustering.cs.wgsl?raw';
 export const constants = {
     bindGroup_scene: 0,
     bindGroup_model: 1,
-    bindGroup_material: 2,
-
+    bindGroup_lightCull: 2,
+    bindGroup_material: 3,
     moveLightsWorkgroupSize: 128,
 
-    lightRadius: 2
+    lightRadius: 2,
+
+    WORKGROUP_SIZE: 128,
+    TILESIZE_X: 16,
+    TILESIZE_Y: 16,
+    MAX_LIGHTS_IN_WORKGROUP: 256,
+    MAX_GRID_SIZE: 256,
+    DEPTH_INTEGER_SCALE: 204800,
 };
 
 // =================================
@@ -49,6 +58,8 @@ export const naiveVertSrc: string = processShaderRaw(naiveVertRaw);
 export const naiveFragSrc: string = processShaderRaw(naiveFragRaw);
 
 export const forwardPlusFragSrc: string = processShaderRaw(forwardPlusFragRaw);
+export const zPrepassFragSrc: string = processShaderRaw(zPrepassFragRaw);
+export const forwardPlusCSRawSrc: string = processShaderRaw(forwardPlusCSRaw);
 
 export const clusteredDeferredFragSrc: string = processShaderRaw(clusteredDeferredFragRaw);
 export const clusteredDeferredFullscreenVertSrc: string = processShaderRaw(clusteredDeferredFullscreenVertRaw);
