@@ -30,7 +30,8 @@ struct FragmentInput
     @builtin(position) fragPos: vec4f,
     @location(0) pos: vec3f,
     @location(1) nor: vec3f,
-    @location(2) uv: vec2f
+    @location(2) uv: vec2f,
+    @location(3) viewPos: vec3f
 }
 
 @fragment
@@ -57,7 +58,15 @@ fn main(in: FragmentInput) -> @location(0) vec4f
     }
 
     var finalColor = diffuseColor.rgb * totalLightContrib;
-    return vec4(f32(lightCount) / 50.,0., 0., 1);
+    return vec4(f32(lightCount) / 10.,0., 0., 1);
+
+    // var ndc = in.fragPos.xy / u_Camera.viewportSize * 2. - 1.;
+    // ndc.y *=-1;
+    // var viewPos = normalize(vec3f(ndc * u_Camera.cameraParams, 1.f));
+    // var viewPos2 = in.viewPos;
+    // viewPos2.z *= -1;
+    // return vec4(normalize(viewPos2).xy, 0., 1.);
+    //return vec4(normalize(viewPos), 1.);
     
     //return vec4(finalColor, 1);
 }

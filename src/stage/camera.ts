@@ -19,17 +19,17 @@ class CameraUniforms {
     }
 
     set viewportSizeX(s:number){
-        this.floatView[128] = s;
+        this.floatView[32] = s;
     }
     set viewportSizeY(s:number){
-        this.floatView[129] = s;
+        this.floatView[33] = s;
     }
 
     set ParamX(s:number){
-        this.floatView[130] = s;
+        this.floatView[34] = s;
     }
     set ParamY(s:number){
-        this.floatView[131] = s;
+        this.floatView[35] = s;
     }
 }
 
@@ -156,8 +156,10 @@ export class Camera {
         this.uniforms.viewMat = viewMat;
         this.uniforms.viewportSizeX = canvas.width;
         this.uniforms.viewportSizeY = canvas.height;
-        this.uniforms.ParamX = aspectRatio * Math.tan(toRadians(fovYDegrees));
-        this.uniforms.ParamY = Math.tan(toRadians(fovYDegrees));
+        console.log("canvas.width " + canvas.width);
+        console.log("canvas.height " + canvas.height);
+        this.uniforms.ParamX = aspectRatio * Math.tan(toRadians(fovYDegrees)*0.5);
+        this.uniforms.ParamY = Math.tan(toRadians(fovYDegrees)*0.5);
         device.queue.writeBuffer(this.uniformsBuffer, 0, this.uniforms.buffer);
         // check `lights.ts` for examples of using `device.queue.writeBuffer()`
     }

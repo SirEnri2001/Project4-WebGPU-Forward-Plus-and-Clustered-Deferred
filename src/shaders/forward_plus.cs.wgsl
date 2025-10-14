@@ -52,44 +52,51 @@ fn computeTileVisibleLightIndex(
     let i = index.x;
     var maxGridSize = ${MAX_GRID_SIZE};
     var gridId = blockId.x + u32(maxGridSize) * blockId.y;
+    var viewportSize = vec2f(u_Camera.viewportSize);
     var tilePos_Pixel = vec4f(vec4i(i32(blockId.x)*${TILESIZE_X},i32(blockId.y)*${TILESIZE_Y},
         i32(blockId.x+1)*${TILESIZE_X},i32(blockId.y+1)*${TILESIZE_Y}));
+    tilePos_Pixel.y = viewportSize.y - tilePos_Pixel.y;
+    tilePos_Pixel.w = viewportSize.y - tilePos_Pixel.w;
     var tileDepthMin = f32(atomicLoad(&tileMinMax[2*gridId])) / f32(${DEPTH_INTEGER_SCALE});
     var tileDepthMax = f32(atomicLoad(&tileMinMax[2*gridId+1])) / f32(${DEPTH_INTEGER_SCALE});
     let lightIdx = i32(tid.x);
-    let light = lightSet.lights[lightIdx]; // suppose light source count less than max tid which is MAX_LIGHTS_IN_WORKGROUP
-    var viewportSize = vec2f(u_Camera.viewportSize);
-
-    var isLightValid: bool = false;
-    var lightPos_View = (u_Camera.viewMat * vec4f(light.pos, 1.)).xyz;
-    var lightRadius = f32(${lightRadius});
-
-    isLightValid = 
-         lightPos_View.z - lightRadius < tileDepthMax 
-         && lightPos_View.z + lightRadius> tileDepthMin;
-    if(isLightValid){
-        var p_bottomleft_ndc = vec2f(tilePos_Pixel.x / viewportSize.x, tilePos_Pixel.y / viewportSize.y);
-        var p_bottomright_ndc = vec2f(tilePos_Pixel.z / viewportSize.x, tilePos_Pixel.w / viewportSize.y);
-        var p_topleft_ndc = vec2f(tilePos_Pixel.x / viewportSize.x, tilePos_Pixel.y / viewportSize.y);
-        var p_topright_ndc = vec2f(tilePos_Pixel.z / viewportSize.x, tilePos_Pixel.w / viewportSize.y);
-        var p_bottomleft_View = vec3f(p_bottomleft_ndc * u_Camera.cameraParams, 1.); 
-        var p_bottomright_View = vec3f(p_bottomright_ndc * u_Camera.cameraParams, 1.); 
-        var p_topleft_View = vec3f(p_topleft_ndc * u_Camera.cameraParams, 1.); 
-        var p_topright_View = vec3f(p_topright_ndc * u_Camera.cameraParams, 1.);
-        var viewPos_View = vec3f(0.,0.,0.);
-        if(planeDistance(lightPos_View, viewPos_View, normalize(cross(p_bottomleft_View, p_bottomright_View)))>lightRadius){
-            isLightValid = false;
-        }
-        else if(planeDistance(lightPos_View, viewPos_View, normalize(cross(p_topright_View, p_topleft_View)))>lightRadius){
-            isLightValid = false;
-        }
-        else if(planeDistance(lightPos_View, viewPos_View, normalize(cross(p_bottomright_View, p_topright_View)))>lightRadius){
-            isLightValid = false;
-        }
-        else if(planeDistance(lightPos_View, viewPos_View, normalize(cross(p_topleft_View, p_bottomleft_View)))>lightRadius){
-            isLightValid = false;
+    var isLightValid: bool = true;
+    if(lightIdx>=i32(lightSet.numLights)){
+        isLightValid = false;
+    }else{
+        let light = lightSet.lights[lightIdx]; // suppose light source count less than max tid which is MAX_LIGHTS_IN_WORKGROUP
+    
+        var lightPos_View = (u_Camera.viewMat * vec4f(light.pos, 1.)).xyz;
+        var lightRadius = f32(${lightRadius});
+    
+        isLightValid = isLightValid && 
+             lightPos_View.z - lightRadius < tileDepthMax 
+             && lightPos_View.z + lightRadius> tileDepthMin;
+        if(isLightValid){
+            var p_bottomleft_ndc = vec2f(tilePos_Pixel.x / viewportSize.x, tilePos_Pixel.y / viewportSize.y)*2.-1.;
+            var p_bottomright_ndc = vec2f(tilePos_Pixel.z / viewportSize.x, tilePos_Pixel.w / viewportSize.y)*2.-1.;
+            var p_topleft_ndc = vec2f(tilePos_Pixel.x / viewportSize.x, tilePos_Pixel.y / viewportSize.y)*2.-1.;
+            var p_topright_ndc = vec2f(tilePos_Pixel.z / viewportSize.x, tilePos_Pixel.w / viewportSize.y)*2.-1.;
+            var p_bottomleft_View = vec3f(p_bottomleft_ndc * u_Camera.cameraParams, -1.); 
+            var p_bottomright_View = vec3f(p_bottomright_ndc * u_Camera.cameraParams, -1.); 
+            var p_topleft_View = vec3f(p_topleft_ndc * u_Camera.cameraParams, -1.); 
+            var p_topright_View = vec3f(p_topright_ndc * u_Camera.cameraParams, -1.);
+            var viewPos_View = vec3f(0.,0.,0.);
+            if(planeDistance(lightPos_View, viewPos_View, normalize(cross(p_bottomleft_View, p_bottomright_View)))>lightRadius){
+                isLightValid = false;
+            }
+            else if(planeDistance(lightPos_View, viewPos_View, normalize(cross(p_topright_View, p_topleft_View)))>lightRadius){
+                isLightValid = false;
+            }
+            else if(planeDistance(lightPos_View, viewPos_View, normalize(cross(p_bottomright_View, p_topright_View)))>lightRadius){
+                isLightValid = false;
+            }
+            else if(planeDistance(lightPos_View, viewPos_View, normalize(cross(p_topleft_View, p_bottomleft_View)))>lightRadius){
+                isLightValid = false;
+            }
         }
     }
+    
 
     // TODO: compare with xy coordinates
     atomicStore(&lightCounter, 0);

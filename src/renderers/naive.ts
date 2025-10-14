@@ -59,6 +59,7 @@ export class NaiveRenderer extends renderer.Renderer {
                 bindGroupLayouts: [
                     this.sceneUniformsBindGroupLayout,
                     renderer.modelBindGroupLayout,
+                    null,
                     renderer.materialBindGroupLayout
                 ]
             }),
