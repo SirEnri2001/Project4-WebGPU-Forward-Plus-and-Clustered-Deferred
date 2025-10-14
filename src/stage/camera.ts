@@ -156,8 +156,8 @@ export class Camera {
         this.uniforms.viewMat = viewMat;
         this.uniforms.viewportSizeX = canvas.width;
         this.uniforms.viewportSizeY = canvas.height;
-        console.log("canvas.width " + canvas.width);
-        console.log("canvas.height " + canvas.height);
+        // console.log("canvas.width " + canvas.width);
+        // console.log("canvas.height " + canvas.height);
         this.uniforms.ParamX = aspectRatio * Math.tan(toRadians(fovYDegrees)*0.5);
         this.uniforms.ParamY = Math.tan(toRadians(fovYDegrees)*0.5);
         device.queue.writeBuffer(this.uniformsBuffer, 0, this.uniforms.buffer);

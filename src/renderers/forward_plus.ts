@@ -36,8 +36,8 @@ export class ForwardPlusRenderer extends renderer.Renderer {
 
     constructor(stage: Stage) {
         super(stage);
-        this.lightIndicesArray  = new Int32Array(this.lights.numLights);
-        this.lightIndicesArray.set(Array(this.lights.numLights).fill(0));
+        this.lightIndicesArray  = new Int32Array(shaders.constants.MAX_GRID_SIZE*shaders.constants.MAX_GRID_SIZE*128);
+        this.lightIndicesArray.set(Array(shaders.constants.MAX_GRID_SIZE*shaders.constants.MAX_GRID_SIZE*128).fill(0));
         this.lightIndices = renderer.device.createBuffer({
             label: "lightIndices",
             size: this.lightIndicesArray.byteLength,
@@ -63,6 +63,7 @@ export class ForwardPlusRenderer extends renderer.Renderer {
             size: this.lightCountTotalArray.byteLength, // sizeof(i32)==4
             usage: GPUBufferUsage.STORAGE  | GPUBufferUsage.COPY_DST| GPUBufferUsage.COPY_SRC
         });
+
         this.gridSizeArray = new Int32Array(2);
         this.gridSize = renderer.device.createBuffer({
             label:"gridSize",
@@ -334,12 +335,10 @@ export class ForwardPlusRenderer extends renderer.Renderer {
             1
         );
         computePass2.end();
-
-
-        const StagingBuffer = renderer.device.createBuffer({
+        var StagingBuffer = renderer.device.createBuffer({
             size: this.lightCountTotalArray.byteLength,
             usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
-        });
+        });        
         encoder.copyBufferToBuffer(
             this.lightCountTotal /* source buffer */,
             0 /* source offset */,
@@ -351,6 +350,8 @@ export class ForwardPlusRenderer extends renderer.Renderer {
         await StagingBuffer.mapAsync(GPUMapMode.READ);
         const res = new Int32Array(StagingBuffer.getMappedRange());
         console.log("Active lights all grids: " + res[0]);
+        StagingBuffer.unmap();
+        StagingBuffer.destroy();
         // console.log("Grid X "+ gridX);
         // console.log("Grid Y "+gridY);
     }

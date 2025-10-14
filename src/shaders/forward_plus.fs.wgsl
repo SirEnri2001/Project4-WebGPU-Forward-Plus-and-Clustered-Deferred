@@ -62,7 +62,8 @@ fn main(in: FragmentInput) -> @location(0) vec4f
     if((finalColor!=finalColor).x){
         finalColor = vec3f(1.,0.,1.);
     }
-    //return vec4(f32(lightCount)*0.01, -in.viewPos.z*0.1, 0., 1);
+    //return vec4f(in.fragPos.xy / viewportSize, 0.0,1.0);
+    //return vec4(f32(lightCount)*0.1, -in.viewPos.z*0.1, 0., 1);
 
     // var ndc = in.fragPos.xy / u_Camera.viewportSize * 2. - 1.;
     // ndc.y *=-1;

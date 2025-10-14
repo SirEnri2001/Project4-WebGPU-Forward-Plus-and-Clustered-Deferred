@@ -65,43 +65,45 @@ fn computeTileVisibleLightIndex(
     if(lightIdx>=i32(lightSet.numLights)){
         isLightValid = false;
     }else{
-        let light = lightSet.lights[lightIdx]; // suppose light source count less than max tid which is MAX_LIGHTS_IN_WORKGROUP
-    
-        var lightPos_View = (u_Camera.viewMat * vec4f(light.pos, 1.)).xyz;
-        var lightRadius = f32(${lightRadius});
-    
-        isLightValid = 
-            isLightValid && lightPos_View.z - lightRadius< 0.
-             && lightPos_View.z + lightRadius > tileDepthMin 
-             && lightPos_View.z - lightRadius < tileDepthMax;
-        if(isLightValid){
-            var p_bottomleft_ndc = vec2f(tilePos_Pixel.x / viewportSize.x, tilePos_Pixel.y / viewportSize.y)*2.-1.;
-            var p_bottomright_ndc = vec2f(tilePos_Pixel.z / viewportSize.x, tilePos_Pixel.y / viewportSize.y)*2.-1.;
-            var p_topleft_ndc = vec2f(tilePos_Pixel.x / viewportSize.x, tilePos_Pixel.w / viewportSize.y)*2.-1.;
-            var p_topright_ndc = vec2f(tilePos_Pixel.z / viewportSize.x, tilePos_Pixel.w / viewportSize.y)*2.-1.;
-            var p_bottomleft_View = vec3f(p_bottomleft_ndc * u_Camera.cameraParams, -1.) * -lightPos_View.z; 
-            var p_bottomright_View = vec3f(p_bottomright_ndc * u_Camera.cameraParams, -1.) * -lightPos_View.z; 
-            var p_topleft_View = vec3f(p_topleft_ndc * u_Camera.cameraParams, -1.) * -lightPos_View.z; 
-            var p_topright_View = vec3f(p_topright_ndc * u_Camera.cameraParams, -1.) * -lightPos_View.z;
-            var viewPos_View = vec3f(0.,0.,0.);
+        // do the culling
 
-            if(planeDistance(lightPos_View, viewPos_View, normalize(cross(p_bottomleft_View, p_bottomright_View)))>lightRadius){
-                isLightValid = false;
-            }
-            else if(planeDistance(lightPos_View, viewPos_View, normalize(cross(p_topright_View, p_topleft_View)))>lightRadius){
-                isLightValid = false;
-            }
-            else if(planeDistance(lightPos_View, viewPos_View, normalize(cross(p_bottomright_View, p_topright_View)))>lightRadius){
-                isLightValid = false;
-            }
-            else if(planeDistance(lightPos_View, viewPos_View, normalize(cross(p_topleft_View, p_bottomleft_View)))>lightRadius){
-                isLightValid = false;
-            }
-        }
+        // let light = lightSet.lights[lightIdx]; // suppose light source count less than max tid which is MAX_LIGHTS_IN_WORKGROUP
+    
+        // var lightPos_View = (u_Camera.viewMat * vec4f(light.pos, 1.)).xyz;
+        // var lightRadius = f32(${lightRadius});
+    
+        // isLightValid = 
+        //     isLightValid && lightPos_View.z - lightRadius< 0.
+        //      && lightPos_View.z + lightRadius > tileDepthMin 
+        //      && lightPos_View.z - lightRadius < tileDepthMax;
+        // if(isLightValid){
+        //     var p_bottomleft_ndc = vec2f(tilePos_Pixel.x / viewportSize.x, tilePos_Pixel.y / viewportSize.y)*2.-1.;
+        //     var p_bottomright_ndc = vec2f(tilePos_Pixel.z / viewportSize.x, tilePos_Pixel.y / viewportSize.y)*2.-1.;
+        //     var p_topleft_ndc = vec2f(tilePos_Pixel.x / viewportSize.x, tilePos_Pixel.w / viewportSize.y)*2.-1.;
+        //     var p_topright_ndc = vec2f(tilePos_Pixel.z / viewportSize.x, tilePos_Pixel.w / viewportSize.y)*2.-1.;
+        //     var p_bottomleft_View = vec3f(p_bottomleft_ndc * u_Camera.cameraParams, -1.) * -lightPos_View.z; 
+        //     var p_bottomright_View = vec3f(p_bottomright_ndc * u_Camera.cameraParams, -1.) * -lightPos_View.z; 
+        //     var p_topleft_View = vec3f(p_topleft_ndc * u_Camera.cameraParams, -1.) * -lightPos_View.z; 
+        //     var p_topright_View = vec3f(p_topright_ndc * u_Camera.cameraParams, -1.) * -lightPos_View.z;
+        //     var viewPos_View = vec3f(0.,0.,0.);
+
+        //     if(planeDistance(lightPos_View, viewPos_View, normalize(cross(p_bottomleft_View, p_bottomright_View)))>lightRadius){
+        //         isLightValid = false;
+        //     }
+        //     else if(planeDistance(lightPos_View, viewPos_View, normalize(cross(p_topright_View, p_topleft_View)))>lightRadius){
+        //         isLightValid = false;
+        //     }
+        //     else if(planeDistance(lightPos_View, viewPos_View, normalize(cross(p_bottomright_View, p_topright_View)))>lightRadius){
+        //         isLightValid = false;
+        //     }
+        //     else if(planeDistance(lightPos_View, viewPos_View, normalize(cross(p_topleft_View, p_bottomleft_View)))>lightRadius){
+        //         isLightValid = false;
+        //     }
+        // }
     }
     
-    atomicStore(&lightCounter, 0);
     if(tid.x==0){
+        atomicStore(&lightCounter, 0);
         lightGrid[2*gridId] = 0;
         lightGrid[2*gridId + 1] = 0;
     }
@@ -113,8 +115,8 @@ fn computeTileVisibleLightIndex(
         }
     }
     workgroupBarrier();
-    var totalLightCountInTile = i32(atomicLoad(&lightCounter));
     if(tid.x==0){
+        var totalLightCountInTile = i32(atomicLoad(&lightCounter));
         var lightOffset = atomicAdd(&lightCountTotal, totalLightCountInTile);
         lightGrid[2*gridId] = i32(lightOffset);
         lightGrid[2*gridId + 1] = i32(totalLightCountInTile);
