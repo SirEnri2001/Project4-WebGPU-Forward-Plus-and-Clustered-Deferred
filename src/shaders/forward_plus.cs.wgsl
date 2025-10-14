@@ -39,7 +39,7 @@ fn computeDepthMinMax(
 }
 
 fn planeDistance(p: vec3f, planePoint: vec3f, planeNormal: vec3f)-> f32{
-    var v = planePoint - p;
+    var v = p - planePoint;
     return dot(planeNormal, v);
 }
 
@@ -61,6 +61,7 @@ fn computeTileVisibleLightIndex(
     var tileDepthMax = f32(atomicLoad(&tileMinMax[2*gridId+1])) / f32(${DEPTH_INTEGER_SCALE});
     let lightIdx = i32(tid.x);
     var isLightValid: bool = true;
+    var debugVal: i32 = 0;
     if(lightIdx>=i32(lightSet.numLights)){
         isLightValid = false;
     }else{
@@ -69,19 +70,21 @@ fn computeTileVisibleLightIndex(
         var lightPos_View = (u_Camera.viewMat * vec4f(light.pos, 1.)).xyz;
         var lightRadius = f32(${lightRadius});
     
-        isLightValid = isLightValid && 
-             lightPos_View.z - lightRadius < tileDepthMax 
-             && lightPos_View.z + lightRadius> tileDepthMin;
+        isLightValid = 
+            isLightValid && lightPos_View.z - lightRadius< 0.
+             && lightPos_View.z + lightRadius > tileDepthMin 
+             && lightPos_View.z - lightRadius < tileDepthMax;
         if(isLightValid){
             var p_bottomleft_ndc = vec2f(tilePos_Pixel.x / viewportSize.x, tilePos_Pixel.y / viewportSize.y)*2.-1.;
-            var p_bottomright_ndc = vec2f(tilePos_Pixel.z / viewportSize.x, tilePos_Pixel.w / viewportSize.y)*2.-1.;
-            var p_topleft_ndc = vec2f(tilePos_Pixel.x / viewportSize.x, tilePos_Pixel.y / viewportSize.y)*2.-1.;
+            var p_bottomright_ndc = vec2f(tilePos_Pixel.z / viewportSize.x, tilePos_Pixel.y / viewportSize.y)*2.-1.;
+            var p_topleft_ndc = vec2f(tilePos_Pixel.x / viewportSize.x, tilePos_Pixel.w / viewportSize.y)*2.-1.;
             var p_topright_ndc = vec2f(tilePos_Pixel.z / viewportSize.x, tilePos_Pixel.w / viewportSize.y)*2.-1.;
-            var p_bottomleft_View = vec3f(p_bottomleft_ndc * u_Camera.cameraParams, -1.); 
-            var p_bottomright_View = vec3f(p_bottomright_ndc * u_Camera.cameraParams, -1.); 
-            var p_topleft_View = vec3f(p_topleft_ndc * u_Camera.cameraParams, -1.); 
-            var p_topright_View = vec3f(p_topright_ndc * u_Camera.cameraParams, -1.);
+            var p_bottomleft_View = vec3f(p_bottomleft_ndc * u_Camera.cameraParams, -1.) * -lightPos_View.z; 
+            var p_bottomright_View = vec3f(p_bottomright_ndc * u_Camera.cameraParams, -1.) * -lightPos_View.z; 
+            var p_topleft_View = vec3f(p_topleft_ndc * u_Camera.cameraParams, -1.) * -lightPos_View.z; 
+            var p_topright_View = vec3f(p_topright_ndc * u_Camera.cameraParams, -1.) * -lightPos_View.z;
             var viewPos_View = vec3f(0.,0.,0.);
+
             if(planeDistance(lightPos_View, viewPos_View, normalize(cross(p_bottomleft_View, p_bottomright_View)))>lightRadius){
                 isLightValid = false;
             }
@@ -97,30 +100,24 @@ fn computeTileVisibleLightIndex(
         }
     }
     
-
-    // TODO: compare with xy coordinates
     atomicStore(&lightCounter, 0);
     if(tid.x==0){
         lightGrid[2*gridId] = 0;
         lightGrid[2*gridId + 1] = 0;
     }
-    atomicStore(&lightCountTotal, 0);
     workgroupBarrier();
-
     if isLightValid {
         let arrayIndex = atomicAdd(&lightCounter, 1);
         if arrayIndex < 1024 {
             lightIndexArray[arrayIndex] = lightIdx;
         }
     }
-    
     workgroupBarrier();
     var totalLightCountInTile = i32(atomicLoad(&lightCounter));
     if(tid.x==0){
-        // move offset of lightIndices
         var lightOffset = atomicAdd(&lightCountTotal, totalLightCountInTile);
-        lightGrid[2*gridId] = lightOffset;
-        lightGrid[2*gridId + 1] = totalLightCountInTile;
+        lightGrid[2*gridId] = i32(lightOffset);
+        lightGrid[2*gridId + 1] = i32(totalLightCountInTile);
         for (var index = lightOffset;index<lightOffset + totalLightCountInTile;index++){
             lightIndices[index] = lightIndexArray[index - lightOffset];
         }

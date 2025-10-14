@@ -38,6 +38,7 @@ struct FragmentInput
 fn main(in: FragmentInput) -> @location(0) vec4f
 {
     let maxGridSize = ${MAX_GRID_SIZE};
+    var viewportSize = vec2f(u_Camera.viewportSize);
     var tileIndex = vec2i(i32(in.fragPos.x / ${TILESIZE_X}), i32(in.fragPos.y / ${TILESIZE_Y}));
     var gridId = tileIndex.x + maxGridSize * tileIndex.y;
     var lightCount = lightGrid[2*gridId + 1];
@@ -58,7 +59,10 @@ fn main(in: FragmentInput) -> @location(0) vec4f
     }
 
     var finalColor = diffuseColor.rgb * totalLightContrib;
-    return vec4(f32(lightCount) / 10.,0., 0., 1);
+    if((finalColor!=finalColor).x){
+        finalColor = vec3f(1.,0.,1.);
+    }
+    //return vec4(f32(lightCount)*0.01, -in.viewPos.z*0.1, 0., 1);
 
     // var ndc = in.fragPos.xy / u_Camera.viewportSize * 2. - 1.;
     // ndc.y *=-1;
@@ -68,5 +72,5 @@ fn main(in: FragmentInput) -> @location(0) vec4f
     // return vec4(normalize(viewPos2).xy, 0., 1.);
     //return vec4(normalize(viewPos), 1.);
     
-    //return vec4(finalColor, 1);
+    return vec4(finalColor, 1);
 }

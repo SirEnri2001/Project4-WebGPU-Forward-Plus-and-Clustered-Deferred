@@ -399,46 +399,46 @@ export class ForwardPlusRenderer extends renderer.Renderer {
         this.zPrepass();
 
         // light culling by tiles
-        this.LightCulling();
-
-        // actual shading
-        {
-            const canvasTextureView = renderer.context.getCurrentTexture().createView();
-            const encoder = renderer.device.createCommandEncoder();
-            const renderPass = encoder.beginRenderPass({
-                label: "forward p render pass",
-                colorAttachments: [
-                    {
-                        view: canvasTextureView,
-                        clearValue: [0, 0, 0, 0],
-                        loadOp: "clear",
-                        storeOp: "store"
+        var res = this.LightCulling();
+        res.then(()=>{
+            // actual shading
+            {
+                const canvasTextureView = renderer.context.getCurrentTexture().createView();
+                const encoder = renderer.device.createCommandEncoder();
+                const renderPass = encoder.beginRenderPass({
+                    label: "forward p render pass",
+                    colorAttachments: [
+                        {
+                            view: canvasTextureView,
+                            clearValue: [0, 0, 0, 0],
+                            loadOp: "clear",
+                            storeOp: "store"
+                        }
+                    ],
+                    depthStencilAttachment: {
+                        view: this.depthTextureView,
+                        depthClearValue: 1.0,
+                        depthLoadOp: "clear",
+                        depthStoreOp: "store"
                     }
-                ],
-                depthStencilAttachment: {
-                    view: this.depthTextureView,
-                    depthClearValue: 1.0,
-                    depthLoadOp: "clear",
-                    depthStoreOp: "store"
-                }
-            });
-            renderPass.setPipeline(this.forwardPlusGraphicsPipeline);
-            renderPass.setBindGroup(shaders.constants.bindGroup_scene, this.sceneUniformsBindGroup);
-            renderPass.setBindGroup(shaders.constants.bindGroup_lightCull, this.lightCullingBindGroup);
-            this.scene.iterate(node => {
-                renderPass.setBindGroup(shaders.constants.bindGroup_model, node.modelBindGroup);
-            }, material => {
-                renderPass.setBindGroup(shaders.constants.bindGroup_material, material.materialBindGroup);
-            }, primitive => {
-                renderPass.setVertexBuffer(0, primitive.vertexBuffer);
-                renderPass.setIndexBuffer(primitive.indexBuffer, 'uint32');
-                renderPass.drawIndexed(primitive.numIndices);
-            });
+                });
+                renderPass.setPipeline(this.forwardPlusGraphicsPipeline);
+                renderPass.setBindGroup(shaders.constants.bindGroup_scene, this.sceneUniformsBindGroup);
+                renderPass.setBindGroup(shaders.constants.bindGroup_lightCull, this.lightCullingBindGroup);
+                this.scene.iterate(node => {
+                    renderPass.setBindGroup(shaders.constants.bindGroup_model, node.modelBindGroup);
+                }, material => {
+                    renderPass.setBindGroup(shaders.constants.bindGroup_material, material.materialBindGroup);
+                }, primitive => {
+                    renderPass.setVertexBuffer(0, primitive.vertexBuffer);
+                    renderPass.setIndexBuffer(primitive.indexBuffer, 'uint32');
+                    renderPass.drawIndexed(primitive.numIndices);
+                });
 
-            renderPass.end();
+                renderPass.end();
 
-            renderer.device.queue.submit([encoder.finish()]);
-        }
-        
+                renderer.device.queue.submit([encoder.finish()]);
+            }
+        })
     }
 }

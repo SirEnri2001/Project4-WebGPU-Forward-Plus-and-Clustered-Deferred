@@ -29,5 +29,5 @@ fn calculateLightContrib(light: Light, posWorld: vec3f, nor: vec3f) -> vec3f {
     let distToLight = length(vecToLight);
 
     let lambert = max(dot(nor, normalize(vecToLight)), 0.f);
-    return light.color * lambert * rangeAttenuation(distToLight);
+    return light.color * lambert  / distToLight / distToLight;//* rangeAttenuation(distToLight);
 }

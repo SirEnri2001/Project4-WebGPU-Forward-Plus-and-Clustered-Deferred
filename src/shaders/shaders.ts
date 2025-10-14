@@ -39,7 +39,7 @@ export const constants = {
     TILESIZE_Y: 16,
     MAX_LIGHTS_IN_WORKGROUP: 256,
     MAX_GRID_SIZE: 256,
-    DEPTH_INTEGER_SCALE: 204800,
+    DEPTH_INTEGER_SCALE: 20480,
 };
 
 // =================================
