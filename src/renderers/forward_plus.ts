@@ -35,8 +35,8 @@ export class ForwardPlusRenderer extends renderer.Renderer {
     forwardPlusCSModule: GPUShaderModule;
 
     lightCullingBatchSize = 64;
-    lightMaxBatchCounts = 64;
-    maxLightsPerTile = 1024;
+    lightMaxBatchCounts = 32;
+    maxLightsPerTile = 512;
 
     constructor(stage: Stage) {
         super(stage);
