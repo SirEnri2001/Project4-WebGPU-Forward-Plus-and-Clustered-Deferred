@@ -37,8 +37,7 @@ export const constants = {
     WORKGROUP_SIZE: 128,
     TILESIZE_X: 16,
     TILESIZE_Y: 16,
-    MAX_LIGHTS_IN_WORKGROUP: 256,
-    MAX_GRID_SIZE: 256,
+    LIGHTS_BATCH_SIZE: 64,
     DEPTH_INTEGER_SCALE: 20480,
 };
 

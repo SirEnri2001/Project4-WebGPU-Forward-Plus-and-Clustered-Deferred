@@ -21,7 +21,7 @@
 @group(${bindGroup_lightCull}) @binding(3) var<storage, read_write> lightGrid: array<i32>;
 @group(${bindGroup_lightCull}) @binding(4) var<storage, read_write> tileMinMax: array<i32>;
 @group(${bindGroup_lightCull}) @binding(5) var<storage, read_write> lightCountTotal: atomic<i32>;
-@group(${bindGroup_lightCull}) @binding(5) var<storage, read> gridSize: vec2i;
+@group(${bindGroup_lightCull}) @binding(6) var<storage, read_write> gridSize: vec3i;
 @group(${bindGroup_material}) @binding(0) var diffuseTex: texture_2d<f32>;
 @group(${bindGroup_material}) @binding(1) var diffuseTexSampler: sampler;
 
@@ -37,12 +37,10 @@ struct FragmentInput
 @fragment
 fn main(in: FragmentInput) -> @location(0) vec4f
 {
-    let maxGridSize = ${MAX_GRID_SIZE};
     var viewportSize = vec2f(u_Camera.viewportSize);
     var tileIndex = vec2i(i32(in.fragPos.x / ${TILESIZE_X}), i32(in.fragPos.y / ${TILESIZE_Y}));
-    var gridId = tileIndex.x + maxGridSize * tileIndex.y;
-    var lightCount = lightGrid[2*gridId + 1];
-    var lightIdxOffset = lightGrid[2*gridId];
+    var gridId = tileIndex.x + gridSize.x * tileIndex.y;
+    var gridDimXY = i32(gridSize.x * gridSize.y);
     var tileMin = f32(tileMinMax[2*gridId]) / f32(${DEPTH_INTEGER_SCALE});
     var tileMax = f32(tileMinMax[2*gridId+1]) / f32(${DEPTH_INTEGER_SCALE});
     var tilePos_Pixel = vec4f(vec4i(i32(tileIndex.x)*${TILESIZE_X},i32(tileIndex.y)*${TILESIZE_Y},
@@ -51,19 +49,25 @@ fn main(in: FragmentInput) -> @location(0) vec4f
     if (diffuseColor.a < 0.5f) {
         discard;
     }
-
+    var totalLightCount:i32 = 0;
     var totalLightContrib = vec3f(0, 0, 0);
-    for (var lightIdx = lightIdxOffset; lightIdx < lightIdxOffset + lightCount; lightIdx++) {
-        let light = lightSet.lights[lightIndices[lightIdx]];
-        totalLightContrib += calculateLightContrib(light, in.pos, normalize(in.nor));
+    for(var lightBatch = 0; lightBatch < gridSize.z; lightBatch++){
+        var lightCount = lightGrid[2*gridId + 1 + 2*lightBatch * gridDimXY];
+        totalLightCount+=lightCount;
+        var lightIdxOffset = lightGrid[2*gridId + 2*lightBatch * gridDimXY];
+        for (var lightIdx = lightIdxOffset; lightIdx < lightIdxOffset + lightCount; lightIdx++) {
+            let light = lightSet.lights[lightIndices[lightIdx]];
+            totalLightContrib += calculateLightContrib(light, in.pos, normalize(in.nor));
+        }
     }
+    
 
     var finalColor = diffuseColor.rgb * totalLightContrib;
     if((finalColor!=finalColor).x){
         finalColor = vec3f(1.,0.,1.);
     }
     //return vec4f(in.fragPos.xy / viewportSize, 0.0,1.0);
-    //return vec4(f32(lightCount)*0.1, -in.viewPos.z*0.1, 0., 1);
+    //return vec4(f32(totalLightCount)*0.1, -in.viewPos.z*0.1, 0., 1);
 
     // var ndc = in.fragPos.xy / u_Camera.viewportSize * 2. - 1.;
     // ndc.y *=-1;

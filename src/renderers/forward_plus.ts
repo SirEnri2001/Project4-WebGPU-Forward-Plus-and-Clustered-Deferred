@@ -34,23 +34,34 @@ export class ForwardPlusRenderer extends renderer.Renderer {
     // shader modules
     forwardPlusCSModule: GPUShaderModule;
 
+    lightCullingBatchSize = 64;
+    lightMaxBatchCounts = 64;
+    maxLightsPerTile = 1024;
+
     constructor(stage: Stage) {
         super(stage);
-        this.lightIndicesArray  = new Int32Array(shaders.constants.MAX_GRID_SIZE*shaders.constants.MAX_GRID_SIZE*128);
-        this.lightIndicesArray.set(Array(shaders.constants.MAX_GRID_SIZE*shaders.constants.MAX_GRID_SIZE*128).fill(0));
+
+        var viewportSizeX = renderer.canvas.width;
+        var viewportSizeY = renderer.canvas.height;
+        var gridX = Math.floor((viewportSizeX + shaders.constants.TILESIZE_X - 1)/shaders.constants.TILESIZE_X);
+        var gridY = Math.floor((viewportSizeY + shaders.constants.TILESIZE_Y - 1)/shaders.constants.TILESIZE_Y);
+        var gridCounts = gridX * gridY;
+
+        this.lightIndicesArray  = new Int32Array(gridCounts*this.maxLightsPerTile);
+        this.lightIndicesArray.set(Array(gridCounts*this.maxLightsPerTile).fill(0));
         this.lightIndices = renderer.device.createBuffer({
             label: "lightIndices",
             size: this.lightIndicesArray.byteLength,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
         });
-        this.lightGridArray  = new Int32Array(2*shaders.constants.MAX_GRID_SIZE*shaders.constants.MAX_GRID_SIZE);
-        this.lightGridArray.set(Array(2*shaders.constants.MAX_GRID_SIZE*shaders.constants.MAX_GRID_SIZE));
+        this.lightGridArray  = new Int32Array(2*gridCounts*this.lightMaxBatchCounts);
+        this.lightGridArray.set(Array(2*gridCounts*this.lightMaxBatchCounts).fill(0));
         this.lightGrid = renderer.device.createBuffer({
             label: "lightGrid",
             size: this.lightGridArray.byteLength,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
         });
-        this.tileMinMaxArray = new Int32Array(2*shaders.constants.MAX_GRID_SIZE*shaders.constants.MAX_GRID_SIZE);
+        this.tileMinMaxArray = new Int32Array(2*gridCounts);
         this.tileMinMax = renderer.device.createBuffer({
             label: "tileMinMax",
             size: this.tileMinMaxArray.byteLength,
@@ -64,11 +75,11 @@ export class ForwardPlusRenderer extends renderer.Renderer {
             usage: GPUBufferUsage.STORAGE  | GPUBufferUsage.COPY_DST| GPUBufferUsage.COPY_SRC
         });
 
-        this.gridSizeArray = new Int32Array(2);
+        this.gridSizeArray = new Int32Array(3);
         this.gridSize = renderer.device.createBuffer({
             label:"gridSize",
-            size: 8,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
+            size: 16,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
         });
 
         // create depth texture RT
@@ -165,6 +176,13 @@ export class ForwardPlusRenderer extends renderer.Renderer {
                 type: "storage",
                 },
             },
+            {
+                binding: 6,
+                visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
+                buffer: {
+                type: "storage",
+                },
+            },
             ],
         });
         this.lightCullingBindGroup = renderer.device.createBindGroup({
@@ -194,6 +212,10 @@ export class ForwardPlusRenderer extends renderer.Renderer {
                 {
                     binding:5,
                     resource:{buffer: this.lightCountTotal}
+                },
+                {
+                    binding:6,
+                    resource:{buffer: this.gridSize}
                 }
             ]
         });
@@ -325,6 +347,7 @@ export class ForwardPlusRenderer extends renderer.Renderer {
         );
         computePass1.end();
 
+        var lightBatchCounts = Math.ceil(this.lights.numLights / this.lightCullingBatchSize);
         const computePass2 = encoder.beginComputePass();
         computePass2.setPipeline(this.computeTileVisibleLightIndexComputePipeline);
         computePass2.setBindGroup(shaders.constants.bindGroup_lightCull, this.lightCullingBindGroup);
@@ -332,7 +355,7 @@ export class ForwardPlusRenderer extends renderer.Renderer {
         computePass2.dispatchWorkgroups(
             gridX, 
             gridY, 
-            1
+            lightBatchCounts
         );
         computePass2.end();
         var StagingBuffer = renderer.device.createBuffer({
@@ -397,6 +420,16 @@ export class ForwardPlusRenderer extends renderer.Renderer {
     }
 
     override draw() {
+        
+        var viewportSizeX = renderer.canvas.width;
+        var viewportSizeY = renderer.canvas.height;
+        var gridX = Math.floor((viewportSizeX + shaders.constants.TILESIZE_X - 1)/shaders.constants.TILESIZE_X);
+        var gridY = Math.floor((viewportSizeY + shaders.constants.TILESIZE_Y - 1)/shaders.constants.TILESIZE_Y);
+        var lightBatchCounts = Math.ceil(this.lights.numLights / this.lightCullingBatchSize);
+        this.gridSizeArray[0] = gridX;
+        this.gridSizeArray[1] = gridY;
+        this.gridSizeArray[2] = lightBatchCounts;
+        renderer.device.queue.writeBuffer(this.gridSize, 0, this.gridSizeArray.buffer);
         this.zPrepass();
 
         // light culling by tiles
