@@ -39,6 +39,7 @@ export const constants = {
     TILESIZE_Y: 16,
     LIGHTS_BATCH_SIZE: 64,
     DEPTH_INTEGER_SCALE: 20480,
+    AVG_LIGHTS_PER_TILE: 2048
 };
 
 // =================================

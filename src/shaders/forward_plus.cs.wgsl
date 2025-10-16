@@ -10,7 +10,7 @@
 @group(${bindGroup_scene}) @binding(0) var<uniform> u_Camera: CameraUniforms;
 
 // workgroup shared mems
-var<workgroup> lightIndexArray_WG: array<i32, 1024>;
+var<workgroup> lightIndexArray_WG: array<i32, 2048>;
 var<workgroup> lightCounter_WG: atomic<i32>;
 
 @compute @workgroup_size(${TILESIZE_X}, ${TILESIZE_Y}, 1)
@@ -62,12 +62,17 @@ fn computeTileVisibleLightIndex(
     var tileDepthMin = f32(atomicLoad(&tileMinMax[2*gridId])) / f32(${DEPTH_INTEGER_SCALE});
     var tileDepthMax = f32(atomicLoad(&tileMinMax[2*gridId+1])) / f32(${DEPTH_INTEGER_SCALE});
     let lightIdx = i32(tid.x + blockId.z * ${LIGHTS_BATCH_SIZE});
-    let lightBatch = i32(blockId.z);
-    var isLightValid: bool = true;
+    var isLightValid: bool = false;
     var debugVal: i32 = 0;
-    if(lightIdx>=i32(lightSet.numLights)){
-        isLightValid = false;
-    }else{
+
+    if(tid.x==0){
+        atomicStore(&lightCounter_WG, 0);
+        lightGrid_ST[2*gridId] = 0;
+        lightGrid_ST[2*gridId + 1] = 0;
+    }
+    workgroupBarrier();
+
+    for(var lightIdx = i32(tid.x); lightIdx < i32(lightSet.numLights); lightIdx += ${LIGHTS_BATCH_SIZE}) {
         // do the culling
         let light = lightSet.lights[lightIdx];
     
@@ -75,7 +80,7 @@ fn computeTileVisibleLightIndex(
         var lightRadius = f32(${lightRadius});
     
         isLightValid = 
-            isLightValid && lightPos_View.z - lightRadius< 0.
+             lightPos_View.z - lightRadius< 0.
              && lightPos_View.z + lightRadius > tileDepthMin 
              && lightPos_View.z - lightRadius < tileDepthMax;
         if(isLightValid){
@@ -102,25 +107,20 @@ fn computeTileVisibleLightIndex(
                 isLightValid = false;
             }
         }
-    }
-    if(tid.x==0){
-        atomicStore(&lightCounter_WG, 0);
-        lightGrid_ST[2*gridId + 2*lightBatch*gridCounts] = 0;
-        lightGrid_ST[2*gridId + 1 + 2*lightBatch*gridCounts] = 0;
-    }
-    workgroupBarrier();
-    if isLightValid {
-        let arrayIndex = atomicAdd(&lightCounter_WG, 1);
-        if arrayIndex < 1024 {
-            lightIndexArray_WG[arrayIndex] = lightIdx;
+        if isLightValid {
+            let arrayIndex = atomicAdd(&lightCounter_WG, 1);
+            if arrayIndex < 2048 {
+                lightIndexArray_WG[arrayIndex] = lightIdx;
+            }
         }
     }
+
     workgroupBarrier();
     if(tid.x==0){
-        var totalLightCountInTile = i32(atomicLoad(&lightCounter_WG));
-        var lightOffset = atomicAdd(&lightCountTotal_ST, totalLightCountInTile);
-        lightGrid_ST[2*gridId + 2*lightBatch*gridCounts] = i32(lightOffset);
-        lightGrid_ST[2*gridId + 1 + 2*lightBatch*gridCounts] = i32(totalLightCountInTile);
+        var totalLightCountInTile = min(i32(atomicLoad(&lightCounter_WG)), 2048);
+        var lightOffset = atomicAdd(&lightCountTotal_ST, 2048);
+        lightGrid_ST[2*gridId] = i32(lightOffset);
+        lightGrid_ST[2*gridId + 1] = i32(totalLightCountInTile);
         for (var index = lightOffset;index<lightOffset + totalLightCountInTile;index++){
             lightIndices_ST[index] = lightIndexArray_WG[index - lightOffset];
         }
