@@ -27,7 +27,6 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
     gridSize: GPUBuffer;
 
     zPrepassGraphicsPipeline: GPURenderPipeline;
-    computeDepthMinMaxComputePipeline: GPUComputePipeline;
     computeTileVisibleLightIndexComputePipeline: GPUComputePipeline;
     forwardPlusGraphicsPipeline: GPURenderPipeline;
 
@@ -42,10 +41,11 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
 
         var viewportSizeX = renderer.canvas.width;
         var viewportSizeY = renderer.canvas.height;
-        var gridX = Math.floor((viewportSizeX + shaders.constants.TILESIZE_X - 1)/shaders.constants.TILESIZE_X);
-        var gridY = Math.floor((viewportSizeY + shaders.constants.TILESIZE_Y - 1)/shaders.constants.TILESIZE_Y);
+        var gridX = shaders.constants.X_SLICES;
+        var gridY = shaders.constants.Y_SLICES;
         var gridZ = shaders.constants.Z_SLICES;
         var gridCounts = gridX * gridY * gridZ;
+        
 
         this.lightIndicesArray  = new Int32Array(gridCounts*this.avgLightsPerCluster);
         this.lightIndicesArray.set(Array(gridCounts*this.avgLightsPerCluster).fill(0));
@@ -81,6 +81,12 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
             size: 16,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
         });
+        
+        this.gridSizeArray[0] = shaders.constants.X_SLICES;
+        this.gridSizeArray[1] = shaders.constants.Y_SLICES;
+        this.gridSizeArray[2] = shaders.constants.Z_SLICES;
+        
+        renderer.device.queue.writeBuffer(this.gridSize, 0, this.gridSizeArray.buffer);
 
         // create depth texture RT
         this.depthRTTexture = renderer.device.createTexture({
@@ -255,23 +261,7 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
 
         this.forwardPlusCSModule = renderer.device.createShaderModule({
             label: 'Light Culling CS shader',
-            code: shaders.forwardPlusCSRawSrc
-        });
-
-        
-        this.computeDepthMinMaxComputePipeline = renderer.device.createComputePipeline({
-            label: 'Light Culling CS Pipeline',
-            layout: renderer.device.createPipelineLayout({
-                label: "Compute Shader Pipeline Layout",
-                bindGroupLayouts: [
-                        this.sceneUniformsBindGroupLayout,
-                        null,
-                        this.lightCullingBindGroupLayout],
-            }),
-            compute: {
-                module: this.forwardPlusCSModule,
-                entryPoint:"computeDepthMinMax"
-            },
+            code: shaders.clusteringComputeSrc
         });
 
         this.computeTileVisibleLightIndexComputePipeline = renderer.device.createComputePipeline({
@@ -314,7 +304,7 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
             fragment: {
                 module: renderer.device.createShaderModule({
                     label: "forward plus frag shader",
-                    code: shaders.forwardPlusFragSrc,
+                    code: shaders.clusteredDeferredFragSrc,
                 }),
                 targets: [
                     {
@@ -331,22 +321,12 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
 
     async LightCulling() : Promise<void> {
         const encoder = renderer.device.createCommandEncoder();
-        var gridX = Math.floor((renderer.canvas.width + shaders.constants.TILESIZE_X - 1) / shaders.constants.TILESIZE_X);
-        var gridY = Math.floor((renderer.canvas.height + shaders.constants.TILESIZE_Y - 1) / shaders.constants.TILESIZE_Y);
+        var gridX = shaders.constants.X_SLICES;
+        var gridY = shaders.constants.Y_SLICES;
+        var gridZ = shaders.constants.Z_SLICES;
         renderer.device.queue.writeBuffer(this.lightCountTotal, 0, this.lightCountTotalArray.buffer);
         renderer.device.queue.writeBuffer(this.lightIndices, 0, this.lightIndicesArray.buffer);
         renderer.device.queue.writeBuffer(this.lightGrid, 0, this.lightGridArray.buffer);
-        const computePass1 = encoder.beginComputePass();
-        computePass1.setPipeline(this.computeDepthMinMaxComputePipeline);
-        computePass1.setBindGroup(shaders.constants.bindGroup_lightCull, this.lightCullingBindGroup);
-        computePass1.setBindGroup(shaders.constants.bindGroup_scene, this.sceneUniformsBindGroup);
-        computePass1.dispatchWorkgroups(
-            gridX, 
-            gridY, 
-            1
-        );
-        computePass1.end();
-
         const computePass2 = encoder.beginComputePass();
         computePass2.setPipeline(this.computeTileVisibleLightIndexComputePipeline);
         computePass2.setBindGroup(shaders.constants.bindGroup_lightCull, this.lightCullingBindGroup);
@@ -354,7 +334,7 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
         computePass2.dispatchWorkgroups(
             gridX, 
             gridY, 
-            1
+            gridZ
         );
         computePass2.end();
         var StagingBuffer = renderer.device.createBuffer({
@@ -372,6 +352,13 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
         await StagingBuffer.mapAsync(GPUMapMode.READ);
         const res = new Int32Array(StagingBuffer.getMappedRange());
         console.log("Active lights all grids: " + res[0]);
+        var allGridLights = res[0];
+        if(allGridLights / this.gridSizeArray[0] / this.gridSizeArray[1]>shaders.constants.AVG_LIGHTS_PER_CLUSTER){
+            console.warn("AVG_LIGHTS_PER_CLUSTER cannot support all lights, screen may flicker")
+        }
+        if(allGridLights>this.lightIndicesArray.length){
+            console.warn("Light Index cannot hold all light instances. Black tile may appear");
+        }
         StagingBuffer.unmap();
         StagingBuffer.destroy();
         // console.log("Grid X "+ gridX);
@@ -419,22 +406,11 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
     }
 
     override draw() {
-        
-        var viewportSizeX = renderer.canvas.width;
-        var viewportSizeY = renderer.canvas.height;
-        var gridX = Math.floor((viewportSizeX + shaders.constants.TILESIZE_X - 1)/shaders.constants.TILESIZE_X);
-        var gridY = Math.floor((viewportSizeY + shaders.constants.TILESIZE_Y - 1)/shaders.constants.TILESIZE_Y);
-        var gridZ = shaders.constants.Z_SLICES;
-        this.gridSizeArray[0] = gridX;
-        this.gridSizeArray[1] = gridY;
-        this.gridSizeArray[2] = gridZ;
-        
-        renderer.device.queue.writeBuffer(this.gridSize, 0, this.gridSizeArray.buffer);
         renderer.device.queue.writeBuffer(this.lightCountTotal, 0, this.lightCountTotalArray.buffer);
         // if(gridCounts*this.maxLightsPerTile>this.lightIndicesArray.length){
         //     this.lightIndicesArray
         // }
-        this.zPrepass();
+        //this.zPrepass();
 
         // light culling by tiles
         var res = this.LightCulling();

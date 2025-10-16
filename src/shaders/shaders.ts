@@ -42,8 +42,11 @@ export const constants = {
     AVG_LIGHTS_PER_TILE: 256,
     MAX_LIGHTS_PER_TILE: 512,
 
+    X_SLICES: 32,
+    Y_SLICES: 32,
     Z_SLICES: 32,
-    AVG_LIGHTS_PER_CLUSTER: 64,
+    AVG_LIGHTS_PER_CLUSTER: 512,
+    MAX_LIGHTS_PER_CLUSTER: 1024,
 };
 
 // =================================

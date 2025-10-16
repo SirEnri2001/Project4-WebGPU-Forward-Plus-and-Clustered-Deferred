@@ -4,40 +4,13 @@
 @group(${bindGroup_lightCull}) @binding(1) var<storage, read> lightSet: LightSet;
 @group(${bindGroup_lightCull}) @binding(2) var<storage, read_write> lightIndices_ST: array<i32>;
 @group(${bindGroup_lightCull}) @binding(3) var<storage, read_write> lightGrid_ST: array<i32>;
-@group(${bindGroup_lightCull}) @binding(4) var<storage, read_write> tileMinMax: array<atomic<i32>>;
 @group(${bindGroup_lightCull}) @binding(5) var<storage, read_write> lightCountTotal_ST: atomic<i32>;
 @group(${bindGroup_lightCull}) @binding(6) var<storage, read_write> gridSize: vec3i;
 @group(${bindGroup_scene}) @binding(0) var<uniform> u_Camera: CameraUniforms;
 
 // workgroup shared mems
-var<workgroup> lightIndexArray_WG: array<i32, ${AVG_LIGHTS_PER_CLUSTER}>;
+var<workgroup> lightIndexArray_WG: array<i32, ${MAX_LIGHTS_PER_CLUSTER}>;
 var<workgroup> lightCounter_WG: atomic<i32>;
-
-@compute @workgroup_size(${TILESIZE_X}, ${TILESIZE_Y}, 1)
-fn computeDepthMinMax(
-    @builtin(global_invocation_id) index: vec3u, 
-    @builtin(local_invocation_id) tid: vec3u, 
-    @builtin(workgroup_id) blockId: vec3u
-) {
-    let i = index.x;
-    var gridId = blockId.x + u32(gridSize.x) * blockId.y;
-    var tileSizeX = u32(${TILESIZE_X});
-    var tileSizeY = u32(${TILESIZE_Y});
-    var viewportSize = vec2u(u_Camera.viewportSize);
-    let uv = vec2u(
-        (tid.x + blockId.x * tileSizeX), 
-        (tid.y + blockId.y * tileSizeY)
-    );
-    let depthValue = i32(textureLoad(depthTexture, uv, 0).x*${DEPTH_INTEGER_SCALE});
-    if(tid.x==0 && tid.y==0){
-        atomicStore(&tileMinMax[2*gridId], 0xfffffff);
-        atomicStore(&tileMinMax[2*gridId+1], -0xfffffff);
-    }
-    workgroupBarrier();
-    let minDepthValue = atomicMin(&tileMinMax[2*gridId], i32(depthValue));
-    let maxDepthValue = atomicMax(&tileMinMax[2*gridId+1], i32(depthValue));
-    workgroupBarrier();
-}
 
 fn planeDistance(p: vec3f, planePoint: vec3f, planeNormal: vec3f)-> f32{
     var v = p - planePoint;
@@ -46,23 +19,28 @@ fn planeDistance(p: vec3f, planePoint: vec3f, planeNormal: vec3f)-> f32{
 
 @compute @workgroup_size(${LIGHTS_BATCH_SIZE})
 fn computeTileVisibleLightIndex(
-    @builtin(global_invocation_id) index: vec3u, 
-    @builtin(local_invocation_id) tid: vec3u, 
-    @builtin(workgroup_id) blockId: vec3u 
+    @builtin(global_invocation_id) index_u: vec3u, 
+    @builtin(local_invocation_id) tid_u: vec3u, 
+    @builtin(workgroup_id) blockId_u: vec3u 
 ) {
+    var index = vec3i(index_u);
+    var tid = vec3i(tid_u);
+    var blockId = vec3i(blockId_u);
     // blockId.xy represents viewport grid coords, blockId.z is which batch of light we are currently appending
     let i = index.x;
     let gridCounts = gridSize.x * gridSize.y;
-    var gridId = i32(blockId.x + u32(gridSize.x) * blockId.y + gridCounts * ${Z_SLICES} * blockId.z);
+    var gridId = i32(blockId.x + gridSize.x * blockId.y + blockId.z* ${Z_SLICES} * gridCounts);
     var viewportSize = vec2f(u_Camera.viewportSize);
-    var tilePos_Pixel = vec4f(vec4i(i32(blockId.x)*${TILESIZE_X},i32(blockId.y)*${TILESIZE_Y},
-        i32(blockId.x+1)*${TILESIZE_X},i32(blockId.y+1)*${TILESIZE_Y}));
+    var tile_x = viewportSize.x / ${X_SLICES};
+    var tile_y = viewportSize.y / ${Y_SLICES};
+    var tilePos_Pixel = vec4f(f32(blockId.x)*tile_x,f32(blockId.y)*tile_y,
+        f32(blockId.x+1)*tile_x,f32(blockId.y+1)*tile_y);
     tilePos_Pixel.y = viewportSize.y - tilePos_Pixel.y;
     tilePos_Pixel.w = viewportSize.y - tilePos_Pixel.w;
     var minZ = -0.1;
     var maxZ = -2000.;
-    var tileDepthMin = maxZ / ${Z_SLICES} * blockId.z;
-    var tileDepthMax = maxZ / ${Z_SLICES} * (blockId.z+1);
+    var tileDepthMin = maxZ / ${Z_SLICES} * f32(blockId.z+1);
+    var tileDepthMax = maxZ / ${Z_SLICES} * f32(blockId.z);
     var isLightValid: bool = false;
     var debugVal: i32 = 0;
 
@@ -118,8 +96,8 @@ fn computeTileVisibleLightIndex(
 
     workgroupBarrier();
     if(tid.x==0){
-        var totalLightCountInTile = min(i32(atomicLoad(&lightCounter_WG)), ${AVG_LIGHTS_PER_CLUSTER});
-        var lightOffset = atomicAdd(&lightCountTotal_ST, ${AVG_LIGHTS_PER_CLUSTER});
+        var totalLightCountInTile = min(i32(atomicLoad(&lightCounter_WG)), ${MAX_LIGHTS_PER_CLUSTER});
+        var lightOffset = atomicAdd(&lightCountTotal_ST, totalLightCountInTile);
         lightGrid_ST[2*gridId] = i32(lightOffset);
         lightGrid_ST[2*gridId + 1] = i32(totalLightCountInTile);
         for (var index = lightOffset;index<lightOffset + totalLightCountInTile;index++){

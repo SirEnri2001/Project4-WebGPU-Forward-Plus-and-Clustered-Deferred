@@ -38,24 +38,30 @@ struct FragmentInput
 fn main(in: FragmentInput) -> @location(0) vec4f
 {
     var viewportSize = vec2f(u_Camera.viewportSize);
-    var tileIndex = vec2i(i32(in.fragPos.x / ${TILESIZE_X}), i32(in.fragPos.y / ${TILESIZE_Y}));
-    var gridId = tileIndex.x + gridSize.x * tileIndex.y;
+    var tile_x = viewportSize.x / ${X_SLICES};
+    var tile_y = viewportSize.y / ${Y_SLICES};
+    var tileIndex = vec2i(i32(in.fragPos.x / tile_x), i32(in.fragPos.y / tile_y));
     var gridDimXY = i32(gridSize.x * gridSize.y);
-    var tileMin = f32(tileMinMax[2*gridId]) / f32(${DEPTH_INTEGER_SCALE});
-    var tileMax = f32(tileMinMax[2*gridId+1]) / f32(${DEPTH_INTEGER_SCALE});
-    var tilePos_Pixel = vec4f(vec4i(i32(tileIndex.x)*${TILESIZE_X},i32(tileIndex.y)*${TILESIZE_Y},
-        i32(tileIndex.x+1)*${TILESIZE_X},i32(tileIndex.y+1)*${TILESIZE_Y}));
+    var tilePos_Pixel = vec4f(f32(tileIndex.x)*tile_x,f32(tileIndex.y)*tile_y,
+        f32(tileIndex.x+1)*tile_x,f32(tileIndex.y+1)*tile_y);
     let diffuseColor = textureSample(diffuseTex, diffuseTexSampler, in.uv);
     if (diffuseColor.a < 0.5f) {
         discard;
     }
     var totalLightContrib = vec3f(0, 0, 0);
-    var lightCount = lightGrid[2*gridId + 1];
-    var lightIdxOffset = lightGrid[2*gridId];
-    for (var lightIdx = lightIdxOffset; lightIdx < lightIdxOffset + lightCount; lightIdx++) {
-        let light = lightSet.lights[lightIndices[lightIdx]];
-        totalLightContrib += calculateLightContrib(light, in.pos, normalize(in.nor));
+    var totalLightCount = 0;
+    for(var z_index = 0; z_index < ${Z_SLICES};z_index++){
+        var gridId = tileIndex.x + gridSize.x * tileIndex.y + z_index * ${Z_SLICES} * gridDimXY;
+        var lightCount = lightGrid[2*gridId + 1];
+        var lightIdxOffset = lightGrid[2*gridId];
+        for (var lightIdx = lightIdxOffset; lightIdx < lightIdxOffset + lightCount; lightIdx++) {
+            let light = lightSet.lights[lightIndices[lightIdx]];
+            totalLightContrib += calculateLightContrib(light, in.pos, normalize(in.nor));
+        }
+        totalLightCount+=lightCount;
     }
+
+    
     
 
     var finalColor = diffuseColor.rgb * totalLightContrib;
@@ -63,7 +69,7 @@ fn main(in: FragmentInput) -> @location(0) vec4f
         finalColor = vec3f(1.,0.,1.);
     }
     //return vec4f(in.fragPos.xy / viewportSize, 0.0,1.0);
-    //return vec4(f32(lightIdxOffset - 10076160), 0.0, 0., 1);
+    //return vec4(f32(totalLightCount)*0.005, 0.0, 0., 1);
 
     // var ndc = in.fragPos.xy / u_Camera.viewportSize * 2. - 1.;
     // ndc.y *=-1;
