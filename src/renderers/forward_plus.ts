@@ -371,6 +371,9 @@ export class ForwardPlusRenderer extends renderer.Renderer {
         await StagingBuffer.mapAsync(GPUMapMode.READ);
         const res = new Int32Array(StagingBuffer.getMappedRange());
         console.log("Active lights all grids: " + res[0]);
+        if(res[0]>this.lightIndicesArray.length){
+            console.warn("Light Index cannot hold all light instances. Black tile may appear");
+        }
         StagingBuffer.unmap();
         StagingBuffer.destroy();
         // console.log("Grid X "+ gridX);
@@ -430,9 +433,6 @@ export class ForwardPlusRenderer extends renderer.Renderer {
         renderer.device.queue.writeBuffer(this.lightCountTotal, 0, this.lightCountTotalArray.buffer);
         var gridCounts = gridX * gridY;
         console.log("Index length "+gridCounts*this.avgLightsPerTile);
-        // if(gridCounts*this.maxLightsPerTile>this.lightIndicesArray.length){
-        //     this.lightIndicesArray
-        // }
         this.zPrepass();
 
         // light culling by tiles

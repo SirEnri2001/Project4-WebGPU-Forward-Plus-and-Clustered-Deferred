@@ -10,7 +10,7 @@
 @group(${bindGroup_scene}) @binding(0) var<uniform> u_Camera: CameraUniforms;
 
 // workgroup shared mems
-var<workgroup> lightIndexArray_WG: array<i32, 2048>;
+var<workgroup> lightIndexArray_WG: array<i32, ${AVG_LIGHTS_PER_CLUSTER}>;
 var<workgroup> lightCounter_WG: atomic<i32>;
 
 @compute @workgroup_size(${TILESIZE_X}, ${TILESIZE_Y}, 1)
@@ -52,16 +52,17 @@ fn computeTileVisibleLightIndex(
 ) {
     // blockId.xy represents viewport grid coords, blockId.z is which batch of light we are currently appending
     let i = index.x;
-    var gridId = i32(blockId.x + u32(gridSize.x) * blockId.y);
     let gridCounts = gridSize.x * gridSize.y;
+    var gridId = i32(blockId.x + u32(gridSize.x) * blockId.y + gridCounts * ${Z_SLICES} * blockId.z);
     var viewportSize = vec2f(u_Camera.viewportSize);
     var tilePos_Pixel = vec4f(vec4i(i32(blockId.x)*${TILESIZE_X},i32(blockId.y)*${TILESIZE_Y},
         i32(blockId.x+1)*${TILESIZE_X},i32(blockId.y+1)*${TILESIZE_Y}));
     tilePos_Pixel.y = viewportSize.y - tilePos_Pixel.y;
     tilePos_Pixel.w = viewportSize.y - tilePos_Pixel.w;
-    var tileDepthMin = f32(atomicLoad(&tileMinMax[2*gridId])) / f32(${DEPTH_INTEGER_SCALE});
-    var tileDepthMax = f32(atomicLoad(&tileMinMax[2*gridId+1])) / f32(${DEPTH_INTEGER_SCALE});
-    let lightIdx = i32(tid.x + blockId.z * ${LIGHTS_BATCH_SIZE});
+    var minZ = -0.1;
+    var maxZ = -2000.;
+    var tileDepthMin = maxZ / ${Z_SLICES} * blockId.z;
+    var tileDepthMax = maxZ / ${Z_SLICES} * (blockId.z+1);
     var isLightValid: bool = false;
     var debugVal: i32 = 0;
 
@@ -117,8 +118,8 @@ fn computeTileVisibleLightIndex(
 
     workgroupBarrier();
     if(tid.x==0){
-        var totalLightCountInTile = min(i32(atomicLoad(&lightCounter_WG)), 2048);
-        var lightOffset = atomicAdd(&lightCountTotal_ST, 2048);
+        var totalLightCountInTile = min(i32(atomicLoad(&lightCounter_WG)), ${AVG_LIGHTS_PER_CLUSTER});
+        var lightOffset = atomicAdd(&lightCountTotal_ST, ${AVG_LIGHTS_PER_CLUSTER});
         lightGrid_ST[2*gridId] = i32(lightOffset);
         lightGrid_ST[2*gridId + 1] = i32(totalLightCountInTile);
         for (var index = lightOffset;index<lightOffset + totalLightCountInTile;index++){

@@ -10,7 +10,7 @@
 @group(${bindGroup_scene}) @binding(0) var<uniform> u_Camera: CameraUniforms;
 
 // workgroup shared mems
-var<workgroup> lightIndexArray_WG: array<i32, 2048>;
+var<workgroup> lightIndexArray_WG: array<i32, ${MAX_LIGHTS_PER_TILE}>;
 var<workgroup> lightCounter_WG: atomic<i32>;
 
 @compute @workgroup_size(${TILESIZE_X}, ${TILESIZE_Y}, 1)
@@ -61,7 +61,6 @@ fn computeTileVisibleLightIndex(
     tilePos_Pixel.w = viewportSize.y - tilePos_Pixel.w;
     var tileDepthMin = f32(atomicLoad(&tileMinMax[2*gridId])) / f32(${DEPTH_INTEGER_SCALE});
     var tileDepthMax = f32(atomicLoad(&tileMinMax[2*gridId+1])) / f32(${DEPTH_INTEGER_SCALE});
-    let lightIdx = i32(tid.x + blockId.z * ${LIGHTS_BATCH_SIZE});
     var isLightValid: bool = false;
     var debugVal: i32 = 0;
 
@@ -109,7 +108,7 @@ fn computeTileVisibleLightIndex(
         }
         if isLightValid {
             let arrayIndex = atomicAdd(&lightCounter_WG, 1);
-            if arrayIndex < 2048 {
+            if arrayIndex < ${MAX_LIGHTS_PER_TILE} {
                 lightIndexArray_WG[arrayIndex] = lightIdx;
             }
         }
@@ -117,8 +116,8 @@ fn computeTileVisibleLightIndex(
 
     workgroupBarrier();
     if(tid.x==0){
-        var totalLightCountInTile = min(i32(atomicLoad(&lightCounter_WG)), 2048);
-        var lightOffset = atomicAdd(&lightCountTotal_ST, 2048);
+        var totalLightCountInTile = min(i32(atomicLoad(&lightCounter_WG)), ${MAX_LIGHTS_PER_TILE});
+        var lightOffset = atomicAdd(&lightCountTotal_ST, totalLightCountInTile);
         lightGrid_ST[2*gridId] = i32(lightOffset);
         lightGrid_ST[2*gridId + 1] = i32(totalLightCountInTile);
         for (var index = lightOffset;index<lightOffset + totalLightCountInTile;index++){

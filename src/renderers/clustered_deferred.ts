@@ -35,7 +35,7 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
     forwardPlusCSModule: GPUShaderModule;
 
     lightCullingBatchSize = 64;
-    avgLightsPerTile = shaders.constants.AVG_LIGHTS_PER_TILE;
+    avgLightsPerCluster = shaders.constants.AVG_LIGHTS_PER_CLUSTER;
 
     constructor(stage: Stage) {
         super(stage);
@@ -44,10 +44,11 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
         var viewportSizeY = renderer.canvas.height;
         var gridX = Math.floor((viewportSizeX + shaders.constants.TILESIZE_X - 1)/shaders.constants.TILESIZE_X);
         var gridY = Math.floor((viewportSizeY + shaders.constants.TILESIZE_Y - 1)/shaders.constants.TILESIZE_Y);
-        var gridCounts = gridX * gridY;
+        var gridZ = shaders.constants.Z_SLICES;
+        var gridCounts = gridX * gridY * gridZ;
 
-        this.lightIndicesArray  = new Int32Array(gridCounts*this.avgLightsPerTile);
-        this.lightIndicesArray.set(Array(gridCounts*this.avgLightsPerTile).fill(0));
+        this.lightIndicesArray  = new Int32Array(gridCounts*this.avgLightsPerCluster);
+        this.lightIndicesArray.set(Array(gridCounts*this.avgLightsPerCluster).fill(0));
         this.lightIndices = renderer.device.createBuffer({
             label: "lightIndices",
             size: this.lightIndicesArray.byteLength,
@@ -423,13 +424,13 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
         var viewportSizeY = renderer.canvas.height;
         var gridX = Math.floor((viewportSizeX + shaders.constants.TILESIZE_X - 1)/shaders.constants.TILESIZE_X);
         var gridY = Math.floor((viewportSizeY + shaders.constants.TILESIZE_Y - 1)/shaders.constants.TILESIZE_Y);
+        var gridZ = shaders.constants.Z_SLICES;
         this.gridSizeArray[0] = gridX;
         this.gridSizeArray[1] = gridY;
-        this.gridSizeArray[2] = 1;
+        this.gridSizeArray[2] = gridZ;
+        
         renderer.device.queue.writeBuffer(this.gridSize, 0, this.gridSizeArray.buffer);
         renderer.device.queue.writeBuffer(this.lightCountTotal, 0, this.lightCountTotalArray.buffer);
-        var gridCounts = gridX * gridY;
-        console.log("Index length "+gridCounts*this.avgLightsPerTile);
         // if(gridCounts*this.maxLightsPerTile>this.lightIndicesArray.length){
         //     this.lightIndicesArray
         // }
