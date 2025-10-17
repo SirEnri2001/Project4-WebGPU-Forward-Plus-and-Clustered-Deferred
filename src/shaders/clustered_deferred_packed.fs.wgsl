@@ -10,9 +10,7 @@ struct FragmentInput
 }
 
 struct RenderTargets{
-    @location(0) baseColor: vec4f,
-    @location(1) normal: vec4f,
-    @location(2) depth: vec4f,
+    @location(0) packedVal: vec4u,
 }
 
 @fragment
@@ -23,9 +21,7 @@ fn main(in: FragmentInput) -> RenderTargets
         discard;
     }
     var rt: RenderTargets;
-    rt.baseColor = diffuseColor;
-    var normal = vec4f(normalize(in.nor.xyz), in.viewPos.z / 16.);
-    rt.normal = vec4f(in.nor.xyz, 1.);
-    rt.depth = vec4f(in.viewPos.z, 0.,0., 1.);
+    var normal = vec4(normalize(in.nor.xyz), in.viewPos.z / 16.);
+    rt.packedVal = vec4u(pack4x8snorm(normal), pack4x8snorm(diffuseColor), u32(-in.viewPos.z*${DEPTH_INTEGER_SCALE}) , 1u);
     return rt;
 }

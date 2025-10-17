@@ -9,10 +9,8 @@
 @group(${bindGroup_lightCull}) @binding(5) var<storage, read_write> lightCountTotal: atomic<i32>;
 @group(${bindGroup_lightCull}) @binding(6) var<storage, read_write> gridSize: vec3i;
 
-@group(${bindGroup_deferredLighting}) @binding(0) var gbufferBaseColor: texture_2d<f32>;
-@group(${bindGroup_deferredLighting}) @binding(1) var gbufferNormal: texture_2d<f32>;
-@group(${bindGroup_deferredLighting}) @binding(2) var gbufferDepth: texture_2d<f32>;
-@group(${bindGroup_deferredLighting}) @binding(3) var frameBuffer: texture_storage_2d<rgba8unorm, write>;
+@group(${bindGroup_deferredLighting}) @binding(0) var gbufferPacked: texture_2d<u32>;
+@group(${bindGroup_deferredLighting}) @binding(1) var frameBuffer: texture_storage_2d<rgba8unorm, write>;
 
 @compute @workgroup_size(16, 16, 1)
 fn deferredShadingCS(
@@ -36,9 +34,11 @@ fn deferredShadingCS(
     var gridDimXY = i32(gridSize.x * gridSize.y);
     var tilePos_Pixel = vec4f(f32(tileIndex.x)*tile_x,f32(tileIndex.y)*tile_y,
         f32(tileIndex.x+1)*tile_x,f32(tileIndex.y+1)*tile_y);
-    let baseColor = textureLoad(gbufferBaseColor, pixelPos, 0).xyz;
-    var normal = textureLoad(gbufferNormal, pixelPos, 0).xyz;
-    let depth = textureLoad(gbufferDepth, pixelPos, 0).x;
+    let packedNormalDepth = textureLoad(gbufferPacked, pixelPos, 0);
+    let baseColor = unpack4x8snorm(packedNormalDepth.y).xyz;
+    var unpackedNormalDepth = unpack4x8snorm(packedNormalDepth.x);
+    var normal = unpackedNormalDepth.xyz;
+    let depth = -f32(packedNormalDepth.z)/${DEPTH_INTEGER_SCALE};
     var pos_ndc = uv*2.-1.;
     pos_ndc.y *=-1;
     var pos_view = vec3f(pos_ndc * u_Camera.cameraParams, -1.) * -depth; 

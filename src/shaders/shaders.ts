@@ -12,9 +12,11 @@ import zPrepassFragRaw from './z_prepass.fs.wgsl?raw';
 import forwardPlusCSRaw from './forward_plus.cs.wgsl?raw'
 
 import clusteredDeferredFragRaw from './clustered_deferred.fs.wgsl?raw';
+import clusteredDeferredPackedFragRaw from './clustered_deferred_packed.fs.wgsl?raw';
 import clusteredDeferredFullscreenVertRaw from './clustered_deferred_fullscreen.vs.wgsl?raw';
 import clusteredDeferredFullscreenFragRaw from './clustered_deferred_fullscreen.fs.wgsl?raw';
 import clusteredDeferredFullscreenCSRaw from './clustered_deferred_fullscreen.cs.wgsl?raw';
+import clusteredDeferredFullscreenPackedCSRaw from './clustered_deferred_fullscreen_compacted_gbuffer.cs.wgsl?raw';
 
 
 import moveLightsComputeRaw from './move_lights.cs.wgsl?raw';
@@ -72,9 +74,11 @@ export const zPrepassFragSrc: string = processShaderRaw(zPrepassFragRaw);
 export const forwardPlusCSRawSrc: string = processShaderRaw(forwardPlusCSRaw);
 
 export const clusteredDeferredFragSrc: string = processShaderRaw(clusteredDeferredFragRaw);
+export const clusteredDeferredPackedFragSrc: string = processShaderRaw(clusteredDeferredPackedFragRaw);
 export const clusteredDeferredFullscreenVertSrc: string = processShaderRaw(clusteredDeferredFullscreenVertRaw);
 export const clusteredDeferredFullscreenFragSrc: string = processShaderRaw(clusteredDeferredFullscreenFragRaw);
 export const clusteredDeferredFullscreenCSSrc : string = processShaderRaw(clusteredDeferredFullscreenCSRaw);
+export const clusteredDeferredFullscreenPackedCSSrc : string = processShaderRaw(clusteredDeferredFullscreenPackedCSRaw);
 
 export const moveLightsComputeSrc: string = processShaderRaw(moveLightsComputeRaw);
 export const clusteringComputeSrc: string = processShaderRaw(clusteringComputeRaw);

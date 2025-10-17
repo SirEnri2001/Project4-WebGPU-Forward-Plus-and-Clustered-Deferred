@@ -9,8 +9,8 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
     lightCullingBindGroup: GPUBindGroup;
     gbuffersBindGroupLayout: GPUBindGroupLayout;
     gbuffersBindGroup: GPUBindGroup;
-
-
+    gbuffersPackedBindGroupLayout: GPUBindGroupLayout;
+    gbuffersPackedBindGroup: GPUBindGroup;
 
     GBufferBaseColor: GPUTexture;
     GBufferBaseColorView: GPUTextureView;
@@ -18,6 +18,8 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
     GBufferNormalView: GPUTextureView;
     GBufferDepth: GPUTexture;
     GBufferDepthView: GPUTextureView;
+    GBufferPacked: GPUTexture;
+    GBufferPackedView: GPUTextureView;
     depthTexture: GPUTexture;
     depthTextureView: GPUTextureView;
 
@@ -25,6 +27,7 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
     FrameBufferView: GPUTextureView;
 
     useCSPipeline: boolean = true;
+    usePackedGBuffer: boolean = true;
 
     lightIndices: GPUBuffer; // output of compute shader
     lightIndicesArray : Int32Array;
@@ -42,9 +45,11 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
     gridSize: GPUBuffer;
 
     BasepassGraphicsPipeline: GPURenderPipeline;
+    BasepassPackedGraphicsPipeline: GPURenderPipeline;
     computeTileVisibleLightIndexComputePipeline: GPUComputePipeline;
     deferredLightingGraphicsPipeline: GPURenderPipeline;
     deferredLightingComputePipeline: GPUComputePipeline;
+    deferredLightingPackedComputePipeline: GPUComputePipeline;
 
     // shader modules
     forwardPlusCSModule: GPUShaderModule;
@@ -132,6 +137,13 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
         });
         this.GBufferDepthView = this.GBufferDepth.createView();
+
+        this.GBufferPacked = renderer.device.createTexture({
+            size: [renderer.canvas.width, renderer.canvas.height],
+            format: "rgba32uint",
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
+        });
+        this.GBufferPackedView = this.GBufferPacked.createView();
 
         this.depthTexture = renderer.device.createTexture({
             size: [renderer.canvas.width, renderer.canvas.height],
@@ -331,6 +343,44 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
             ]
         });
 
+        this.gbuffersPackedBindGroupLayout = renderer.device.createBindGroupLayout({
+            label:"GBufferPacked Layout",
+            entries: [
+            {
+                binding: 0,
+                visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
+                texture: {
+                sampleType: "uint", // "r32float" do not support textureSample, nor it is "float" sample type
+                viewDimension: "2d",
+                multisampled: false,
+                },
+            },
+            {
+                binding: 1,
+                visibility: GPUShaderStage.COMPUTE,
+                storageTexture: {
+                access:	"write-only",
+                format:"rgba8unorm",
+                viewDimension:"2d"
+                },
+            },
+            ],
+        });
+        this.gbuffersPackedBindGroup = renderer.device.createBindGroup({
+            label:"GBufferPacked Bind",
+            layout: this.gbuffersPackedBindGroupLayout,
+            entries:[
+                {
+                    binding:0,
+                    resource: this.GBufferPackedView
+                },
+                {
+                    binding:1,
+                    resource: renderer.context.getCurrentTexture().createView()
+                },
+            ]
+        });
+
         this.BasepassGraphicsPipeline = renderer.device.createRenderPipeline({
             layout: renderer.device.createPipelineLayout({
                 label: "basepass pipeline layout",
@@ -374,6 +424,43 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
             }
         });
 
+        this.BasepassPackedGraphicsPipeline = renderer.device.createRenderPipeline({
+            layout: renderer.device.createPipelineLayout({
+                label: "basepass packed pipeline layout",
+                bindGroupLayouts: [
+                    this.sceneUniformsBindGroupLayout,
+                    renderer.modelBindGroupLayout,
+                    null,
+                    renderer.materialBindGroupLayout
+                ]
+            }),
+            depthStencil: {
+                depthWriteEnabled: true,
+                depthCompare: "less",
+                format: "depth24plus"
+            },
+            vertex: {
+                module: renderer.device.createShaderModule({
+                    label: "deferred basepass vert shader",
+                    code: shaders.naiveVertSrc
+                }),
+                entryPoint:"main",
+                buffers: [ renderer.vertexBufferLayout ]
+            },
+            fragment: {
+                module: renderer.device.createShaderModule({
+                    label: "deferred packed basepass frag shader",
+                    code: shaders.clusteredDeferredPackedFragSrc,
+                }),
+                entryPoint:"main",
+                targets: [
+                    {
+                        format: "rgba32uint",
+                    }
+                ]
+            }
+        });
+
         this.forwardPlusCSModule = renderer.device.createShaderModule({
             label: 'Light Culling CS shader',
             code: shaders.clusteringComputeSrc
@@ -409,6 +496,26 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
                 module: renderer.device.createShaderModule({
                     label: "Deferred lighting cs shader",
                     code: shaders.clusteredDeferredFullscreenCSSrc,
+                }),
+                entryPoint:"deferredShadingCS"
+            },
+        });
+
+        this.deferredLightingPackedComputePipeline = renderer.device.createComputePipeline({
+            label: 'Deferred Lighting Packed CS Pipeline',
+            layout: renderer.device.createPipelineLayout({
+                label: "Packed Compute Shader Pipeline Layout",
+                bindGroupLayouts: [
+                    this.sceneUniformsBindGroupLayout,
+                    null,
+                    this.lightCullingBindGroupLayout,
+                    this.gbuffersPackedBindGroupLayout,
+                ],
+            }),
+            compute: {
+                module: renderer.device.createShaderModule({
+                    label: "Deferred lighting cs shader",
+                    code: shaders.clusteredDeferredFullscreenPackedCSSrc,
                 }),
                 entryPoint:"deferredShadingCS"
             },
@@ -505,38 +612,65 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
     BasePass(): void{
         const encoder = renderer.device.createCommandEncoder();
         // z prepass
-        const renderPass = encoder.beginRenderPass({
-            label: "forward p base pass",
-            colorAttachments: [
-                {
-                    view: this.GBufferBaseColorView,
-                    clearValue: [0, 0, 0, 0],
-                    loadOp: "clear",
-                    storeOp: "store"
-                },
-                {
-                    view: this.GBufferNormalView,
-                    clearValue: [0, 0, 0, 0],
-                    loadOp: "clear",
-                    storeOp: "store"
-                },
-                {
-                    view: this.GBufferDepthView,
-                    clearValue: [0, 0, 0, 0],
-                    loadOp: "clear",
-                    storeOp: "store"
-                },
+        var desc:GPURenderPassDescriptor;
+        if(this.usePackedGBuffer){
+            desc = {
+                label: "forward p base pass",
+                colorAttachments: [
+                    {
+                        view: this.GBufferPackedView,
+                        clearValue: [0, 0, 0, 0],
+                        loadOp: "clear",
+                        storeOp: "store"
+                    },
+                ],
+                depthStencilAttachment: {
+                    view: this.depthTextureView,
+                    depthClearValue: 1.0,
+                    depthLoadOp: "clear",
+                    depthStoreOp: "store"
+                }
+            };
+        }
+        else
+        {
+            desc = {
+                label: "forward p base pass",
+                colorAttachments: [
+                    {
+                        view: this.GBufferBaseColorView,
+                        clearValue: [0, 0, 0, 0],
+                        loadOp: "clear",
+                        storeOp: "store"
+                    },
+                    {
+                        view: this.GBufferNormalView,
+                        clearValue: [0, 0, 0, 0],
+                        loadOp: "clear",
+                        storeOp: "store"
+                    },
+                    {
+                        view: this.GBufferDepthView,
+                        clearValue: [0, 0, 0, 0],
+                        loadOp: "clear",
+                        storeOp: "store"
+                    },
 
-            ],
-            depthStencilAttachment: {
-                view: this.depthTextureView,
-                depthClearValue: 1.0,
-                depthLoadOp: "clear",
-                depthStoreOp: "store"
-            }
-        });
-        renderPass.setPipeline(this.BasepassGraphicsPipeline);
-
+                ],
+                depthStencilAttachment: {
+                    view: this.depthTextureView,
+                    depthClearValue: 1.0,
+                    depthLoadOp: "clear",
+                    depthStoreOp: "store"
+                }
+            };
+        }
+        const renderPass = encoder.beginRenderPass(desc);
+        if(this.usePackedGBuffer){
+            renderPass.setPipeline(this.BasepassPackedGraphicsPipeline);
+        }else{
+            renderPass.setPipeline(this.BasepassGraphicsPipeline);
+        }
         // bind `this.sceneUniformsBindGroup` to index `shaders.constants.bindGroup_scene`
         renderPass.setBindGroup(shaders.constants.bindGroup_scene, this.sceneUniformsBindGroup);
         this.sceneUniformsBindGroup
@@ -565,7 +699,48 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
         
         res.then(()=>{
             // actual shading
-            if(this.useCSPipeline){
+            if (this.usePackedGBuffer){
+                const encoder = renderer.device.createCommandEncoder();
+                var gridX = Math.ceil(renderer.canvas.width/16);
+                var gridY = Math.ceil(renderer.canvas.height/16);
+                const computePass2 = encoder.beginComputePass();
+                computePass2.setPipeline(this.deferredLightingPackedComputePipeline);
+                computePass2.setBindGroup(shaders.constants.bindGroup_scene, this.sceneUniformsBindGroup);
+                computePass2.setBindGroup(shaders.constants.bindGroup_lightCull, this.lightCullingBindGroup);
+                this.gbuffersPackedBindGroup = renderer.device.createBindGroup({ // ... create bind group every frame since 
+                    label:"GBuffer Packed Bind",
+                    layout: this.gbuffersPackedBindGroupLayout,
+                    entries:[
+                        {
+                            binding:0,
+                            resource: this.GBufferPackedView
+                        },
+                        {
+                            binding:1,
+                            resource: renderer.context.getCurrentTexture().createView()
+                        },
+                    ]
+                });
+                computePass2.setBindGroup(shaders.constants.bindGroup_deferredLighting, this.gbuffersPackedBindGroup);
+                computePass2.dispatchWorkgroups(
+                    gridX, 
+                    gridY, 
+                    1
+                );
+                computePass2.end();
+                // encoder.copyTextureToTexture(
+                //     // details of the source texture
+                //     { texture:this.FrameBuffer },
+                    
+                //     // details of the destination texture
+                //    { texture: renderer.context.getCurrentTexture()},
+                    
+                //     // size:
+                //     [ renderer.canvas.width, renderer.canvas.height, 1 ]
+                // );
+                renderer.device.queue.submit([encoder.finish()]);
+            }
+            else if(this.useCSPipeline){
                 const encoder = renderer.device.createCommandEncoder();
                 var gridX = Math.ceil(renderer.canvas.width/16);
                 var gridY = Math.ceil(renderer.canvas.height/16);
