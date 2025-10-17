@@ -13,29 +13,61 @@
 var<workgroup> lightIndexArray_WG: array<i32, ${MAX_LIGHTS_PER_TILE}>;
 var<workgroup> lightCounter_WG: atomic<i32>;
 
-@compute @workgroup_size(${TILESIZE_X}, ${TILESIZE_Y}, 1)
+@compute @workgroup_size(16, 16, 1)
 fn computeDepthMinMax(
-    @builtin(global_invocation_id) index: vec3u, 
-    @builtin(local_invocation_id) tid: vec3u, 
-    @builtin(workgroup_id) blockId: vec3u
+    @builtin(global_invocation_id) index_u: vec3u, 
+    @builtin(local_invocation_id) tid_u: vec3u, 
+    @builtin(workgroup_id) blockId_u: vec3u
 ) {
-    let i = index.x;
-    var gridId = blockId.x + u32(gridSize.x) * blockId.y;
-    var tileSizeX = u32(${TILESIZE_X});
-    var tileSizeY = u32(${TILESIZE_Y});
-    var viewportSize = vec2u(u_Camera.viewportSize);
-    let uv = vec2u(
-        (tid.x + blockId.x * tileSizeX), 
-        (tid.y + blockId.y * tileSizeY)
+    var index = vec3i(index_u);
+    var tid = vec3i(tid_u);
+    var blockId = vec3i(blockId_u);
+    var gridId = blockId.x + gridSize.x * blockId.y;
+    var viewportSize = vec2f(u_Camera.viewportSize);
+    var tileSizeX = i32(ceil(viewportSize.x / ${X_SLICES}));
+    var tileSizeY = i32(ceil(viewportSize.y / ${Y_SLICES}));
+    var pos_pixel = vec2i(
+        i32(f32(tid.x) + f32(blockId.x) / ${X_SLICES} * viewportSize.x), 
+        i32(f32(tid.y) + f32(blockId.y) / ${Y_SLICES} * viewportSize.y)
     );
-    let depthValue = i32(textureLoad(depthTexture, uv, 0).x*${DEPTH_INTEGER_SCALE});
+    var pos_pixel_end = vec2i(
+        (pos_pixel.x + tileSizeX), 
+        (pos_pixel.y + tileSizeY)
+    );
+    var tileCountX = i32(ceil(f32(tileSizeX) / 16));
+    var tileCountY = i32(ceil(f32(tileSizeY) / 16));
     if(tid.x==0 && tid.y==0){
         atomicStore(&tileMinMax[2*gridId], 0xfffffff);
         atomicStore(&tileMinMax[2*gridId+1], -0xfffffff);
     }
+    var minDepth = 0xfffffff;
+    var maxDepth = -0xfffffff;
+    for(var y = 0; y < tileSizeY; y+=16){
+        // if(pos_pixel.y+y*16>pos_pixel_end.y || pos_pixel.y+y*16>i32(viewportSize.y)){
+        //     continue;
+        // }
+        for(var x = 0; x < tileSizeX;x+=16){
+            // if(pos_pixel.x+x*16>pos_pixel_end.x || pos_pixel.x+x*16>i32(viewportSize.x)){
+            //     continue;
+            // }
+            var curPos_pixel = vec2i(pos_pixel.x+x, pos_pixel.y+y);
+            curPos_pixel.y = i32(viewportSize.y) - curPos_pixel.y;
+            let depthValue = i32(textureLoad(depthTexture, curPos_pixel, 0).x*${DEPTH_INTEGER_SCALE});
+            if(depthValue==0){
+                continue;
+            }
+            if(depthValue>maxDepth){
+                maxDepth = depthValue;
+            }
+            if(depthValue<minDepth){
+                minDepth = depthValue;
+            }
+        }
+        
+    }
     workgroupBarrier();
-    let minDepthValue = atomicMin(&tileMinMax[2*gridId], i32(depthValue));
-    let maxDepthValue = atomicMax(&tileMinMax[2*gridId+1], i32(depthValue));
+    let minDepthValue = atomicMin(&tileMinMax[2*gridId], i32(minDepth));
+    let maxDepthValue = atomicMax(&tileMinMax[2*gridId+1], i32(maxDepth));
     workgroupBarrier();
 }
 
@@ -46,19 +78,24 @@ fn planeDistance(p: vec3f, planePoint: vec3f, planeNormal: vec3f)-> f32{
 
 @compute @workgroup_size(${LIGHTS_BATCH_SIZE})
 fn computeTileVisibleLightIndex(
-    @builtin(global_invocation_id) index: vec3u, 
-    @builtin(local_invocation_id) tid: vec3u, 
-    @builtin(workgroup_id) blockId: vec3u 
+    @builtin(global_invocation_id) index_u: vec3u, 
+    @builtin(local_invocation_id) tid_u: vec3u, 
+    @builtin(workgroup_id) blockId_u: vec3u 
 ) {
+    
+    var index = vec3i(index_u);
+    var tid = vec3i(tid_u);
+    var blockId = vec3i(blockId_u);
+    
     // blockId.xy represents viewport grid coords, blockId.z is which batch of light we are currently appending
     let i = index.x;
-    var gridId = i32(blockId.x + u32(gridSize.x) * blockId.y);
+    var gridId = blockId.x + gridSize.x * blockId.y;
     let gridCounts = gridSize.x * gridSize.y;
     var viewportSize = vec2f(u_Camera.viewportSize);
-    var tilePos_Pixel = vec4f(vec4i(i32(blockId.x)*${TILESIZE_X},i32(blockId.y)*${TILESIZE_Y},
-        i32(blockId.x+1)*${TILESIZE_X},i32(blockId.y+1)*${TILESIZE_Y}));
-    tilePos_Pixel.y = viewportSize.y - tilePos_Pixel.y;
-    tilePos_Pixel.w = viewportSize.y - tilePos_Pixel.w;
+    var tile_x = viewportSize.x / ${X_SLICES};
+    var tile_y = viewportSize.y / ${Y_SLICES};
+    var tilePos_Pixel = vec4f(f32(blockId.x)*tile_x,f32(blockId.y)*tile_y,
+        f32(blockId.x+1)*tile_x,f32(blockId.y+1)*tile_y);
     var tileDepthMin = f32(atomicLoad(&tileMinMax[2*gridId])) / f32(${DEPTH_INTEGER_SCALE});
     var tileDepthMax = f32(atomicLoad(&tileMinMax[2*gridId+1])) / f32(${DEPTH_INTEGER_SCALE});
     var isLightValid: bool = false;

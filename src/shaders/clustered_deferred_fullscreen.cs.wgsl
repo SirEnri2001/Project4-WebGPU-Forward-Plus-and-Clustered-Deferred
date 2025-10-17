@@ -29,9 +29,7 @@ fn main(in: FragmentInput) -> @location(0) vec4f
     var pixelPos = vec2u(in.fragPos.xy);
     var tile_x = viewportSize.x / ${X_SLICES};
     var tile_y = viewportSize.y / ${Y_SLICES};
-    var invert_y_fragPos = in.fragPos.xy;
-    invert_y_fragPos.y = viewportSize.y - invert_y_fragPos.y;
-    var tileIndex = vec2i(i32(invert_y_fragPos.x / tile_x), i32(invert_y_fragPos.y / tile_y));
+    var tileIndex = vec2i(i32(in.fragPos.x / tile_x), i32(in.fragPos.y / tile_y));
     var gridDimXY = i32(gridSize.x * gridSize.y);
     var tilePos_Pixel = vec4f(f32(tileIndex.x)*tile_x,f32(tileIndex.y)*tile_y,
         f32(tileIndex.x+1)*tile_x,f32(tileIndex.y+1)*tile_y);
@@ -52,8 +50,8 @@ fn main(in: FragmentInput) -> @location(0) vec4f
             let light = lightSet.lights[lightIndices[lightIdx]];
             var light_pos_view = (u_Camera.viewMat * vec4f(light.pos, 1.)).xyz;
             totalLightContrib += calculateLightContrib_View(light, light_pos_view, pos_view, normalize(normal_view));
-            totalLightCount+=1;
         }
+        totalLightCount+=lightCount;
     }
 
     var finalColor = baseColor * totalLightContrib;
@@ -61,8 +59,8 @@ fn main(in: FragmentInput) -> @location(0) vec4f
         finalColor = vec3f(1.,0.,1.);
     }
     //return vec4f(abs(pos_view)*0.1, 1.);
-    //return vec4f(vec2f(tileIndex)/18., 0.0,1.0);
-    //return vec4(f32(totalLightCount)*0.01, 0.0, 0., 1);
+    //return vec4f(in.fragPos.xy / viewportSize, 0.0,1.0);
+    //return vec4(f32(totalLightCount)*0.05, 0.0, 0., 1);
 
     // var ndc = in.fragPos.xy / u_Camera.viewportSize * 2. - 1.;
     // ndc.y *=-1;
@@ -72,16 +70,5 @@ fn main(in: FragmentInput) -> @location(0) vec4f
     // return vec4(normalize(viewPos2).xy, 0., 1.);
     //return vec4(normalize(viewPos), 1.);
     
-    
-    // var p_bottomleft_ndc = vec2f(tilePos_Pixel.x / viewportSize.x, tilePos_Pixel.y / viewportSize.y)*2.-1.;
-    // var p_bottomright_ndc = vec2f(tilePos_Pixel.z / viewportSize.x, tilePos_Pixel.y / viewportSize.y)*2.-1.;
-    // var p_topleft_ndc = vec2f(tilePos_Pixel.x / viewportSize.x, tilePos_Pixel.w / viewportSize.y)*2.-1.;
-    // var p_topright_ndc = vec2f(tilePos_Pixel.z / viewportSize.x, tilePos_Pixel.w / viewportSize.y)*2.-1.;
-    // var tile_size_ndc = vec2f(1./${X_SLICES}., 1./${Y_SLICES}.) * 2;
-    // var display = (pos_ndc - p_bottomleft_ndc) / tile_size_ndc;
-    // if(display.x!=display.x){
-    //     return vec4(0.,0.,1.,1.);
-    // }
-    // return vec4(vec2f(display), 0., 1);
     return vec4(finalColor, 1);
 }

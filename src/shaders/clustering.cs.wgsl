@@ -32,8 +32,6 @@ fn computeTileVisibleLightIndex(
     var tile_y = viewportSize.y / ${Y_SLICES};
     var tilePos_Pixel = vec4f(f32(blockId.x)*tile_x,f32(blockId.y)*tile_y,
         f32(blockId.x+1)*tile_x,f32(blockId.y+1)*tile_y);
-    tilePos_Pixel.y = viewportSize.y - tilePos_Pixel.y;
-    tilePos_Pixel.w = viewportSize.y - tilePos_Pixel.w;
     var minZ = -0.1;
     var maxZ = -2000.;
     var tileDepthMin = maxZ / ${Z_SLICES} * f32(blockId.z+1);

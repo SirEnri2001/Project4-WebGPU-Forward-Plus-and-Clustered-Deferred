@@ -330,8 +330,8 @@ export class ForwardPlusRenderer extends renderer.Renderer {
 
     async LightCulling() : Promise<void> {
         const encoder = renderer.device.createCommandEncoder();
-        var gridX = Math.floor((renderer.canvas.width + shaders.constants.TILESIZE_X - 1) / shaders.constants.TILESIZE_X);
-        var gridY = Math.floor((renderer.canvas.height + shaders.constants.TILESIZE_Y - 1) / shaders.constants.TILESIZE_Y);
+        var gridX = shaders.constants.X_SLICES;
+        var gridY = shaders.constants.Y_SLICES;
         renderer.device.queue.writeBuffer(this.lightCountTotal, 0, this.lightCountTotalArray.buffer);
         renderer.device.queue.writeBuffer(this.lightIndices, 0, this.lightIndicesArray.buffer);
         renderer.device.queue.writeBuffer(this.lightGrid, 0, this.lightGridArray.buffer);

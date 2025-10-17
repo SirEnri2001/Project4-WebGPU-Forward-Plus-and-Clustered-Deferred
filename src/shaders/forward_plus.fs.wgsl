@@ -38,7 +38,11 @@ struct FragmentInput
 fn main(in: FragmentInput) -> @location(0) vec4f
 {
     var viewportSize = vec2f(u_Camera.viewportSize);
-    var tileIndex = vec2i(i32(in.fragPos.x / ${TILESIZE_X}), i32(in.fragPos.y / ${TILESIZE_Y}));
+    var tile_x = viewportSize.x / ${X_SLICES};
+    var tile_y = viewportSize.y / ${Y_SLICES};
+    var invert_y_fragPos = in.fragPos.xy;
+    invert_y_fragPos.y = viewportSize.y - invert_y_fragPos.y;
+    var tileIndex = vec2i(i32(invert_y_fragPos.x / tile_x), i32(invert_y_fragPos.y / tile_y));
     var gridId = tileIndex.x + gridSize.x * tileIndex.y;
     var gridDimXY = i32(gridSize.x * gridSize.y);
     var tileMin = f32(tileMinMax[2*gridId]) / f32(${DEPTH_INTEGER_SCALE});
@@ -63,7 +67,7 @@ fn main(in: FragmentInput) -> @location(0) vec4f
         finalColor = vec3f(1.,0.,1.);
     }
     //return vec4f(in.fragPos.xy / viewportSize, 0.0,1.0);
-    //return vec4(f32(lightIdxOffset - 10076160), 0.0, 0., 1);
+    //return vec4(f32(tileMax), 0.0, 0., 1);
 
     // var ndc = in.fragPos.xy / u_Camera.viewportSize * 2. - 1.;
     // ndc.y *=-1;
