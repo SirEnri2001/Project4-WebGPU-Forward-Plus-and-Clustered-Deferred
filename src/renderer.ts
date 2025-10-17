@@ -49,10 +49,11 @@ export async function initWebGPU() {
     device = await adapter.requestDevice();
 
     context = canvas.getContext("webgpu")!;
-    canvasFormat = navigator.gpu.getPreferredCanvasFormat();
+    canvasFormat = "rgba8unorm";//navigator.gpu.getPreferredCanvasFormat();
     context.configure({
         device: device,
         format: canvasFormat,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.STORAGE_BINDING
     });
 
     console.log("WebGPU init successsful");

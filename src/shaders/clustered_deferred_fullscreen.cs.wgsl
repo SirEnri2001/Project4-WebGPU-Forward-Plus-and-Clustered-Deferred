@@ -13,23 +13,27 @@
 @group(${bindGroup_deferredLighting}) @binding(0) var gbufferBaseColor: texture_2d<f32>;
 @group(${bindGroup_deferredLighting}) @binding(1) var gbufferNormal: texture_2d<f32>;
 @group(${bindGroup_deferredLighting}) @binding(2) var gbufferDepth: texture_2d<f32>;
+@group(${bindGroup_deferredLighting}) @binding(3) var frameBuffer: texture_storage_2d<rgba8unorm, write>;
 
-
-
-struct FragmentInput
+@compute @workgroup_size(16, 16, 1)
+fn deferredShadingCS(
+    @builtin(global_invocation_id) index_u: vec3u, 
+    @builtin(local_invocation_id) tid_u: vec3u, 
+    @builtin(workgroup_id) blockId_u: vec3u 
+)
 {
-    @builtin(position) fragPos: vec4f,
-}
-
-@fragment
-fn main(in: FragmentInput) -> @location(0) vec4f
-{
+    var index = vec3i(index_u);
+    var tid = vec3i(tid_u);
+    var blockId = vec3i(blockId_u);
     var viewportSize = vec2f(u_Camera.viewportSize);
-    var uv = in.fragPos.xy / viewportSize;
-    var pixelPos = vec2u(in.fragPos.xy);
+    var fragPos = vec2f(f32(blockId.x*16+tid.x), f32(blockId.y*16+tid.y));
+    var uv = fragPos.xy / viewportSize;
+    var pixelPos = vec2u(fragPos.xy);
     var tile_x = viewportSize.x / ${X_SLICES};
     var tile_y = viewportSize.y / ${Y_SLICES};
-    var tileIndex = vec2i(i32(in.fragPos.x / tile_x), i32(in.fragPos.y / tile_y));
+    var invert_y_fragPos = fragPos.xy;
+    invert_y_fragPos.y = viewportSize.y - invert_y_fragPos.y;
+    var tileIndex = vec2i(i32(invert_y_fragPos.x / tile_x), i32(invert_y_fragPos.y / tile_y));
     var gridDimXY = i32(gridSize.x * gridSize.y);
     var tilePos_Pixel = vec4f(f32(tileIndex.x)*tile_x,f32(tileIndex.y)*tile_y,
         f32(tileIndex.x+1)*tile_x,f32(tileIndex.y+1)*tile_y);
@@ -50,8 +54,8 @@ fn main(in: FragmentInput) -> @location(0) vec4f
             let light = lightSet.lights[lightIndices[lightIdx]];
             var light_pos_view = (u_Camera.viewMat * vec4f(light.pos, 1.)).xyz;
             totalLightContrib += calculateLightContrib_View(light, light_pos_view, pos_view, normalize(normal_view));
+            totalLightCount+=1;
         }
-        totalLightCount+=lightCount;
     }
 
     var finalColor = baseColor * totalLightContrib;
@@ -69,6 +73,5 @@ fn main(in: FragmentInput) -> @location(0) vec4f
     // viewPos2.z *= -1;
     // return vec4(normalize(viewPos2).xy, 0., 1.);
     //return vec4(normalize(viewPos), 1.);
-    
-    return vec4(finalColor, 1);
+    textureStore(frameBuffer, pixelPos, vec4f(finalColor, 1.));
 }
