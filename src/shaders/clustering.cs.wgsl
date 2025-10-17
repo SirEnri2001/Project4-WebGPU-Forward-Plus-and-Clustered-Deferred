@@ -1,6 +1,3 @@
-
-
-@group(${bindGroup_lightCull}) @binding(0) var depthTexture: texture_2d<f32>;
 @group(${bindGroup_lightCull}) @binding(1) var<storage, read> lightSet: LightSet;
 @group(${bindGroup_lightCull}) @binding(2) var<storage, read_write> lightIndices_ST: array<i32>;
 @group(${bindGroup_lightCull}) @binding(3) var<storage, read_write> lightGrid_ST: array<i32>;

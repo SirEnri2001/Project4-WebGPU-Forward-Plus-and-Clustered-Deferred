@@ -30,6 +30,7 @@ export const constants = {
     bindGroup_model: 1,
     bindGroup_lightCull: 2,
     bindGroup_material: 3,
+    bindGroup_deferredLighting: 3,
     moveLightsWorkgroupSize: 128,
 
     lightRadius: 2,

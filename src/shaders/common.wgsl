@@ -32,6 +32,14 @@ fn calculateLightContrib(light: Light, posWorld: vec3f, nor: vec3f) -> vec3f {
     return light.color * lambert  / distToLight / distToLight * rangeAttenuation(distToLight);
 }
 
+fn calculateLightContrib_View(light: Light, light_pos_View: vec3f, pos_View: vec3f, nor: vec3f) -> vec3f {
+    let vecToLight = light_pos_View - pos_View;
+    let distToLight = length(vecToLight);
+
+    let lambert = max(dot(nor, normalize(vecToLight)), 0.f);
+    return light.color * lambert  / distToLight / distToLight * rangeAttenuation(distToLight);
+}
+
 fn getLightGridIndex(gridId: i32, gridCounts: i32, lightBatchId: i32, lightBatchSize: i32) -> i32{
     return 2*gridId + 2 * lightBatchId * gridCounts;
 }
