@@ -113,7 +113,7 @@ fn computeTileVisibleLightIndex(
         let light = lightSet.lights[lightIdx];
     
         var lightPos_View = (u_Camera.viewMat * vec4f(light.pos, 1.)).xyz;
-        var lightRadius = f32(${lightRadius});
+        var lightRadius = f32(2);
     
         isLightValid = 
              lightPos_View.z - lightRadius< 0.
