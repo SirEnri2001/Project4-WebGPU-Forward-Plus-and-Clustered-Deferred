@@ -1,16 +1,16 @@
 // TODO-3: implement the Clustered Deferred fullscreen fragment shader
 
-@group(${bindGroup_scene}) @binding(0) var<uniform> u_Camera: CameraUniforms;
-@group(${bindGroup_scene}) @binding(1) var<storage, read> lightSet: LightSet;
+@group(0) @binding(0) var<uniform> u_Camera: CameraUniforms;
+@group(0) @binding(1) var<storage, read> lightSet: LightSet;
 // Similar to the Forward+ fragment shader, but with vertex information coming from the G-buffer instead.
-@group(${bindGroup_lightCull}) @binding(2) var<storage, read_write> lightIndices: array<i32>;
-@group(${bindGroup_lightCull}) @binding(3) var<storage, read_write> lightGrid: array<i32>;
-@group(${bindGroup_lightCull}) @binding(4) var<storage, read_write> tileMinMax: array<i32>;
-@group(${bindGroup_lightCull}) @binding(5) var<storage, read_write> lightCountTotal: atomic<i32>;
-@group(${bindGroup_lightCull}) @binding(6) var<storage, read_write> gridSize: vec3i;
+@group(2) @binding(2) var<storage, read_write> lightIndices: array<i32>;
+@group(2) @binding(3) var<storage, read_write> lightGrid: array<i32>;
+@group(2) @binding(4) var<storage, read_write> tileMinMax: array<i32>;
+@group(2) @binding(5) var<storage, read_write> lightCountTotal: atomic<i32>;
+@group(2) @binding(6) var<storage, read_write> gridSize: vec3i;
 
-@group(${bindGroup_deferredLighting}) @binding(0) var gbufferPacked: texture_2d<u32>;
-@group(${bindGroup_deferredLighting}) @binding(1) var frameBuffer: texture_storage_2d<rgba8unorm, write>;
+@group(3) @binding(0) var gbufferPacked: texture_2d<u32>;
+@group(3) @binding(1) var frameBuffer: texture_storage_2d<rgba8unorm, write>;
 
 @compute @workgroup_size(16, 16, 1)
 fn deferredShadingCS(
