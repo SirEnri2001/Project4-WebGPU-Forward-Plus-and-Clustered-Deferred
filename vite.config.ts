@@ -4,5 +4,5 @@ export default defineConfig({
     build: {
         target: 'esnext'
     },
-    base: process.env.GITHUB_ACTIONS_BASE || undefined
+    base: '/Project4-WebGPU-Forward-Plus-and-Clustered-Deferred/'
 })
